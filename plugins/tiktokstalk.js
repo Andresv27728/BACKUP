@@ -1,32 +1,31 @@
-import { igStalk } from '../lib/scraper.js';
+import { tiktokStalk } from '../lib/scraper.js';
 
-const igCommand = {
-  name: "ig",
+const tiktokStalkCommand = {
+  name: "tiktokstalk",
   category: "informacion",
-  description: "Busca información de un perfil de Instagram.",
+  description: "Busca información de un perfil de TikTok.",
 
   async execute({ sock, msg, args }) {
     const username = args[0];
     if (!username) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un nombre de usuario de Instagram." }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un nombre de usuario de TikTok." }, { quoted: msg });
     }
 
     try {
       const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando perfil de @${username}...` }, { quoted: msg });
-      const data = await igStalk(username);
+      const data = await tiktokStalk(username);
 
       if (!data) {
         throw new Error("No se pudo encontrar el perfil.");
       }
 
       const caption = `
-*Información de Instagram*
+*Información de TikTok*
 
 *Nombre:* ${data.name}
 *Username:* ${data.username}
-*Seguidores:* ${data.followersH} (${data.followers})
-*Siguiendo:* ${data.followingH} (${data.following})
-*Posts:* ${data.postsH} (${data.posts})
+*Seguidores:* ${data.followers}
+*Siguiendo:* ${data.following}
 
 *Descripción:*
 ${data.description}
@@ -35,7 +34,7 @@ ${data.description}
       await sock.sendMessage(
         msg.key.remoteJid,
         {
-          image: { url: data.profilePic },
+          image: { url: data.pp_user },
           caption: caption
         },
         { quoted: msg }
@@ -43,10 +42,10 @@ ${data.description}
       await sock.sendMessage(msg.key.remoteJid, { text: "✅ Perfil encontrado." }, { edit: waitingMsg.key });
 
     } catch (error) {
-      console.error("Error en el comando ig:", error);
+      console.error("Error en el comando tiktokstalk:", error);
       await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error al buscar el perfil. ${error.message}` }, { quoted: msg });
     }
   }
 };
 
-export default igCommand;
+export default tiktokStalkCommand;
