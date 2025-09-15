@@ -21,7 +21,7 @@ const config = {
   // APIs (si las tienes, si no, déjalas como están)
   // No es necesario modificar estas si usas las APIs públicas de Adonix.
   api: {
-    ytmp3: "https://myapiadonix.vercel.app/api/ytmp3",
+    ytmp3: "https://api.vreden.my.id/api/ytplaymp3?query=",
     ytmp4: "https://myapiadonix.vercel.app/api/ytmp4",
     gemini: "AIzaSyDEww4IKqba9tgfb8ndMDBOoLkl-nSy4tw" // Tu API Key de Gemini
   },
