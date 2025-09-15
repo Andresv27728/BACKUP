@@ -1,4 +1,4 @@
-import youtubedl from 'youtube-dl-exec';
+import { facebookDl } from '../lib/scraper.js';
 
 const facebookCommand = {
   name: "facebook",
@@ -17,11 +17,13 @@ const facebookCommand = {
     const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video...` }, { quoted: msg });
 
     try {
-      // Usa youtube-dl-exec para obtener el enlace de descarga directo
-      const downloadUrl = await youtubedl(url, {
-        getUrl: true,
-        format: 'best[ext=mp4][height<=720]/best[ext=mp4]'
-      });
+      const links = await facebookDl(url);
+      if (!links || Object.keys(links).length === 0) {
+        throw new Error("No se pudieron obtener los enlaces de descarga.");
+      }
+
+      // Prioritize HD over SD
+      const downloadUrl = links['HD'] || links['SD'];
 
       if (!downloadUrl) {
         throw new Error("No se pudo obtener la URL de descarga del video.");
@@ -40,13 +42,8 @@ const facebookCommand = {
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ ¡Video enviado!`, edit: waitingMsg.key });
 
     } catch (error) {
-      console.error("Error en el comando facebook (youtube-dl-exec):", error);
-      const errorMessage = error.stderr || error.message;
-      if (errorMessage.includes('proxy') || errorMessage.includes('HTTP Error 429')) {
-        await sock.sendMessage(msg.key.remoteJid, { text: "El servicio de descarga está sobrecargado o bloqueado. Inténtalo más tarde." }, { edit: waitingMsg.key, quoted: msg });
-      } else {
-        await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. El enlace puede ser inválido, privado o el servicio de descarga estar fallando.`, edit: waitingMsg.key, quoted: msg });
-      }
+      console.error("Error en el comando facebook:", error);
+      await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. El enlace puede ser inválido, privado o el servicio de descarga estar fallando.`, edit: waitingMsg.key, quoted: msg });
     }
   }
 };
