@@ -69,13 +69,13 @@ async function handleDownload(sock, msg, selection, testCache) {
   }
 
   const cached = testCache.get(senderId);
+  let waitingMsg;
 
   try {
     const videoInfo = cached.video;
+    waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Procesando ${type}... (Puede tardar hasta 90 segundos)` }, { quoted: msg });
+
     const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(videoInfo.url)}&format=${type}`;
-
-    await sock.sendMessage(msg.key.remoteJid, { text: `Procesando ${type}... (Puede tardar hasta 90 segundos)` }, { quoted: msg });
-
     const response = await axios.get(apiUrl, { timeout: 90000 });
 
     if (!response.data || !response.data.status || !response.data.data?.url) {
@@ -98,7 +98,13 @@ async function handleDownload(sock, msg, selection, testCache) {
     const errorMessage = e.code === 'ECONNABORTED'
       ? 'El servidor de descargas tardó demasiado en responder.'
       : 'Error al procesar la descarga. La API podría estar fallando.';
-    await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
+
+    const errorMsg = { text: `❌ ${errorMessage}` };
+    if (waitingMsg) {
+      await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
+    } else {
+      await sock.sendMessage(msg.key.remoteJid, errorMsg, { quoted: msg });
+    }
   }
 }
 

@@ -50,7 +50,7 @@ const artistaCommand = {
           const result = response.data;
 
           if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
-            throw new Error("La API no devolvió un enlace de descarga válido.");
+            throw new Error(`API no devolvió un enlace para "${trackTitle}"`);
           }
 
           const downloadUrl = result.data.url;
@@ -72,7 +72,12 @@ const artistaCommand = {
 
     } catch (error) {
       console.error("Error en el comando artista:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ *Error:* ${error.message}` }, { quoted: msg });
+      const errorMsg = { text: `❌ *Error:* ${error.message}` };
+      if (waitingMsg) {
+        await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
+      } else {
+        await sock.sendMessage(msg.key.remoteJid, errorMsg, { quoted: msg });
+      }
     } finally {
       isDownloadingArtist = false;
     }
