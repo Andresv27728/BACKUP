@@ -3,6 +3,8 @@ import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
 import { readSettingsDb, readMaintenanceDb } from './lib/database.js';
 import print from './lib/print.js';
+import axios from 'axios';
+import { facebookDl, instagramDl } from './lib/scraper.js';
 
 const COOLDOWN_SECONDS = 5;
 const RESPONSE_DELAY_MS = 2000;
@@ -23,7 +25,57 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     const from = msg.key.remoteJid;
     let body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
+    // --- Lógica de Auto-Descarga ---
     const settings = readSettingsDb();
+    const isGroup = from.endsWith('@g.us');
+
+    if (isGroup && settings[from]?.autoDl) {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const urls = body.match(urlRegex);
+
+      if (urls && urls.length > 0) {
+        const url = urls[0];
+        let downloadUrl;
+        let downloaderName = '';
+
+        try {
+          // Regex para cada plataforma
+          const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=)?(?:shorts\/)?([\w-]{11})/;
+          const fbRegex = /https?:\/\/(www\.)?(facebook\.com|fb\.watch)\/[^\s]+/i;
+          const igRegex = /https?:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[^\s]+/i;
+
+          if (ytRegex.test(url)) {
+            downloaderName = 'YouTube';
+            const apiResponse = await axios.get(`https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}&format=video`);
+            if (apiResponse.data?.status === 'true' && apiResponse.data?.data?.url) {
+              downloadUrl = apiResponse.data.data.url;
+            } else {
+              throw new Error("La API de YouTube no devolvió un enlace válido.");
+            }
+          } else if (fbRegex.test(url)) {
+            downloaderName = 'Facebook';
+            const fbLinks = await facebookDl(url);
+            downloadUrl = fbLinks?.['HD'] || fbLinks?.['SD'];
+             if (!downloadUrl) throw new Error("No se pudo obtener el enlace de descarga de Facebook.");
+          } else if (igRegex.test(url)) {
+            downloaderName = 'Instagram';
+            downloadUrl = await instagramDl(url);
+            if (!downloadUrl) throw new Error("No se pudo obtener el enlace de descarga de Instagram.");
+          }
+
+          if (downloadUrl) {
+            await sock.sendMessage(from, { text: `📥 Descargando video de ${downloaderName}...` }, { quoted: msg });
+            await sock.sendMessage(from, { video: { url: downloadUrl }, mimetype: 'video/mp4' }, { quoted: msg });
+            return; // Detener el procesamiento para no tratarlo como comando
+          }
+        } catch (e) {
+          console.error(`Error en Auto-Descarga (${downloaderName}):`, e.message);
+          // Opcional: enviar un mensaje de error silencioso o no enviar nada
+          // await sock.sendMessage(from, { text: `❌ Error al auto-descargar de ${downloaderName}.` }, { quoted: msg });
+        }
+      }
+    }
+
     const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
 
     let commandName;
