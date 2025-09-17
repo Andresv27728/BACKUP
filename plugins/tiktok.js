@@ -1,4 +1,4 @@
-import { tiktokdl } from '@mrnima/tiktok-downloader';
+import axios from 'axios';
 
 const tiktokCommand = {
   name: "tiktok",
@@ -17,22 +17,23 @@ const tiktokCommand = {
     const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video de TikTok...` }, { quoted: msg });
 
     try {
-      const result = await tiktokdl(url);
-      if (!result || !result.status === 'success' || !result.result || !result.result.video) {
-        throw new Error("No se pudo obtener el video de TikTok. El enlace puede ser inválido o el servicio de descarga estar fallando.");
+      const apiUrl = `https://myapiadonix.casacam.net/download/tiktok?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}`;
+      const response = await axios.get(apiUrl);
+
+      if (response.data.status !== "true" || !response.data.data || !response.data.data.video) {
+        throw new Error('La API no devolvió un video válido o el enlace es incorrecto.');
       }
 
-      const videoUrl = result.result.video.nowm;
+      const { title, author, video } = response.data.data;
+      const videoUrl = video;
 
-      if (!videoUrl) {
-        throw new Error("No se pudo obtener la URL de descarga del video sin marca de agua.");
-      }
+      const caption = `*Título:* ${title}\n*Autor:* ${author.name} (@${author.username})`;
 
       await sock.sendMessage(
         msg.key.remoteJid,
         {
           video: { url: videoUrl },
-          caption: `✨ ¡Aquí tienes tu video de TikTok!`,
+          caption: caption,
           mimetype: 'video/mp4'
         },
         { quoted: msg }

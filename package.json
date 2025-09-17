@@ -17,7 +17,6 @@
   "dependencies": {
     "@hapi/boom": "^9.1.4",
     "@mrnima/facebook-downloader": "^1.0.0",
-    "@mrnima/tiktok-downloader": "^1.0.0",
     "@vitalets/google-translate-api": "^9.2.0",
     "@whiskeysockets/baileys": "^6.7.2",
     "aptoide-scraper": "^1.0.1",
