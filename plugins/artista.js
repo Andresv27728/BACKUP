@@ -41,8 +41,6 @@ const artistaCommand = {
         const trackUrl = track.url;
 
         try {
-          await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
-
           const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(trackUrl)}&format=audio`;
 
           const response = await axios.get(apiUrl);
@@ -55,8 +53,8 @@ const artistaCommand = {
           const downloadUrl = result.data.url;
           const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
-          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
-          await sock.sendMessage(msg.key.remoteJid, { text: trackTitle }, { quoted: msg });
+          // Se envía solo el audio para minimizar el spam
+          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', fileName: `${trackTitle}.mp3` }, { quoted: msg });
 
         } catch (downloadError) {
             console.error(`Falló la descarga de "${trackTitle}":`, downloadError.message);
