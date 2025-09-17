@@ -19,13 +19,6 @@ const autodlCommand = {
 
     try {
       const metadata = await sock.groupMetadata(from);
-      const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-      const botIsAdmin = metadata.participants.find(p => p.id === botJid)?.admin;
-
-      if (!botIsAdmin) {
-        return sock.sendMessage(from, { text: "Necesito ser administrador del grupo para usar este comando." }, { quoted: msg });
-      }
-
       const senderId = msg.key.participant || msg.key.remoteJid;
       const senderIsAdmin = metadata.participants.find(p => p.id === senderId)?.admin;
 
