@@ -1,7 +1,5 @@
 import yts from 'yt-search';
-import fs from 'fs';
 import axios from 'axios';
-import { downloadWithYtdlp, downloadWithDdownr, downloadWithAdonix } from '../lib/downloaders.js';
 
 let isDownloadingArtist = false; // Flag para prevenir ejecuciones concurrentes
 
@@ -40,35 +38,31 @@ const artistaCommand = {
       for (let i = 0; i < tracksToDownload.length; i++) {
         const track = tracksToDownload[i];
         const trackTitle = track.title || "Título Desconocido";
-        await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
+        const trackUrl = track.url;
 
-        let audioBuffer;
         try {
-          // Plan A: Adonix API
-          const adonixUrl = await downloadWithAdonix(track.url);
-          audioBuffer = (await axios.get(adonixUrl, { responseType: 'arraybuffer' })).data;
-        } catch (e1) {
-          console.error(`artista: Adonix failed for ${trackTitle}:`, e1.message);
-          try {
-            // Plan B: yt-dlp
-            const tempFilePath = await downloadWithYtdlp(track.url, false);
-            audioBuffer = fs.readFileSync(tempFilePath);
-            fs.unlinkSync(tempFilePath);
-          } catch (e2) {
-            console.error(`artista: yt-dlp failed for ${trackTitle}:`, e2.message);
-            try {
-                // Plan C: ddownr
-                const ddownrUrl = await downloadWithDdownr(track.url, false);
-                audioBuffer = (await axios.get(ddownrUrl, { responseType: 'arraybuffer' })).data;
-            } catch (e3) {
-                console.error(`artista: ddownr failed for ${trackTitle}:`, e3.message);
-                await sock.sendMessage(msg.key.remoteJid, { text: `❌ Falló la descarga de *${trackTitle}*. Saltando a la siguiente.` }, { quoted: msg });
-                continue; // Saltar a la siguiente canción
-            }
+          await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
+
+          const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(trackUrl)}&format=audio`;
+
+          const response = await axios.get(apiUrl);
+          const result = response.data;
+
+          if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
+              throw new Error("La API no devolvió un enlace de descarga válido.");
           }
+
+          const downloadUrl = result.data.url;
+          const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+
+          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', caption: trackTitle }, { quoted: msg });
+
+        } catch (downloadError) {
+            console.error(`Falló la descarga de "${trackTitle}":`, downloadError.message);
+            await sock.sendMessage(msg.key.remoteJid, { text: `❌ Falló la descarga de *${trackTitle}*. Saltando a la siguiente.` }, { quoted: msg });
+            continue; // Saltar a la siguiente canción
         }
 
-        await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
         await new Promise(resolve => setTimeout(resolve, 1000)); // Pequeña pausa
       }
 
