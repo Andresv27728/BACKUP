@@ -1,5 +1,6 @@
 import yts from 'yt-search';
 import axios from 'axios';
+import config from '../config.js';
 
 const playCommand = {
   name: "play",
@@ -25,7 +26,7 @@ const playCommand = {
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando audio...` }, { edit: waitingMsg.key });
 
-      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}&format=audio`;
+      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(url)}&format=audio`;
 
       const response = await axios.get(apiUrl);
       const result = response.data;
@@ -44,8 +45,9 @@ const playCommand = {
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Descarga completada. Enviando archivos...` }, { edit: waitingMsg.key });
 
-      // Enviar como audio reproducible
-      await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', caption: title }, { quoted: msg });
+      // Enviar como audio reproducible y luego el título
+      await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: title }, { quoted: msg });
 
       // Enviar como documento
       await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: msg });
