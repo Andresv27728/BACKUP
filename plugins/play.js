@@ -1,3 +1,4 @@
+import yts from 'yt-search';
 import axios from 'axios';
 
 const playCommand = {
@@ -14,24 +15,28 @@ const playCommand = {
     let waitingMsg;
 
     try {
-      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando y descargando "${query}"...` }, { quoted: msg });
+      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando "${query}"...` }, { quoted: msg });
 
-      const apiUrl = `https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(query)}`;
+      const searchResults = await yts(query);
+      if (!searchResults.videos.length) throw new Error("No se encontraron resultados.");
 
-      // First, get the download link
-      const apiResponse = await axios.get(apiUrl);
-      const downloadUrl = apiResponse.data.data.download;
+      const videoInfo = searchResults.videos[0];
+      const { title, url } = videoInfo;
 
-      if (!downloadUrl) {
-          throw new Error("No se pudo obtener el enlace de descarga de la API.");
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando audio...` }, { edit: waitingMsg.key });
+
+      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}&format=audio`;
+
+      const response = await axios.get(apiUrl);
+      const result = response.data;
+
+      if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
+          throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
       }
 
-      // Then, download the audio buffer from the link
-      const response = await axios.get(downloadUrl, {
-        responseType: 'arraybuffer'
-      });
+      const downloadUrl = result.data.url;
 
-      const audioBuffer = response.data;
+      const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
       if (!audioBuffer || audioBuffer.length === 0) {
         throw new Error("No se pudo obtener el audio de la API.");
@@ -40,24 +45,19 @@ const playCommand = {
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Descarga completada. Enviando archivos...` }, { edit: waitingMsg.key });
 
       // Enviar como audio reproducible
-      await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', caption: title }, { quoted: msg });
 
       // Enviar como documento
-      await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${query}.mp3` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: msg });
 
     } catch (error) {
       console.error("Error en el comando play:", error);
       let errorMessage = "Error al descargar la canción.";
       if (error.response) {
-          console.error(error.response.data);
-          console.error(error.response.status);
-          console.error(error.response.headers);
           errorMessage = `Error de la API: ${error.response.status}`;
       } else if (error.request) {
-          console.error(error.request);
           errorMessage = "La API no respondió.";
       } else {
-          console.error('Error', error.message);
           errorMessage = error.message;
       }
       const errorMsg = { text: `❌ ${errorMessage}` };
