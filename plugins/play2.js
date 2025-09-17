@@ -11,18 +11,13 @@ const play2Command = {
     if (args.length === 0) return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de un video." }, { quoted: msg });
 
     const query = args.join(' ');
-    let waitingMsg;
 
     try {
-      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando "${query}"...` }, { quoted: msg });
-
       const searchResults = await yts(query);
       if (!searchResults.videos.length) throw new Error("No se encontraron resultados.");
 
       const videoInfo = searchResults.videos[0];
       const { title, url } = videoInfo;
-
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando video...` }, { edit: waitingMsg.key });
 
       const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}&format=video`;
 
@@ -38,18 +33,11 @@ const play2Command = {
 
       if (!videoBuffer) throw new Error("El buffer de video está vacío.");
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Descarga completada. Enviando video...` }, { edit: waitingMsg.key });
-
       await sock.sendMessage(msg.key.remoteJid, { video: videoBuffer, mimetype: 'video/mp4', caption: title }, { quoted: msg });
 
     } catch (error) {
       console.error("Error final en play2:", error);
-      const errorMsg = { text: `❌ ${error.message}` };
-       if (waitingMsg) {
-        await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
-      } else {
-        await sock.sendMessage(msg.key.remoteJid, errorMsg, { quoted: msg });
-      }
+      await sock.sendMessage(msg.key.remoteJid, { text: `❌ ${error.message}` }, { quoted: msg });
     }
   }
 };

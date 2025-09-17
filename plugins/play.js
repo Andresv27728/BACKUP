@@ -13,11 +13,8 @@ const playCommand = {
     }
 
     const query = args.join(' ');
-    let waitingMsg;
 
     try {
-      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando "${query}"...` }, { quoted: msg });
-
       const searchResults = await yts(query);
       if (!searchResults.videos.length) {
         throw new Error("No se encontraron resultados.");
@@ -25,8 +22,6 @@ const playCommand = {
 
       const videoInfo = searchResults.videos[0];
       const { title, url } = videoInfo;
-
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando audio...` }, { edit: waitingMsg.key });
 
       const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}&format=audio`;
 
@@ -44,8 +39,6 @@ const playCommand = {
         throw new Error("No se pudo obtener el audio de la API.");
       }
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Descarga completada. Enviando archivos...` }, { edit: waitingMsg.key });
-
       // Enviar como audio reproducible y luego el título
       await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
       await sock.sendMessage(msg.key.remoteJid, { text: title }, { quoted: msg });
@@ -56,12 +49,7 @@ const playCommand = {
     } catch (error) {
       console.error("Error en el comando play:", error);
       const errorMessage = error.message || "Error al descargar la canción.";
-      const errorMsg = { text: `❌ ${errorMessage}` };
-      if (waitingMsg) {
-        await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
-      } else {
-        await sock.sendMessage(msg.key.remoteJid, errorMsg, { quoted: msg });
-      }
+      await sock.sendMessage(msg.key.remoteJid, { text: `❌ ${errorMessage}` }, { quoted: msg });
     }
   }
 };
