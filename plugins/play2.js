@@ -1,23 +1,10 @@
 import yts from 'yt-search';
-import fs from 'fs';
 import axios from 'axios';
-import { downloadWithYtdlp, downloadWithDdownr } from '../lib/downloaders.js';
-
-// Helper for the extra APIs
-async function downloadWithApi(apiUrl) {
-    const response = await axios.get(apiUrl);
-    const result = response.data;
-    const downloadUrl = result?.result?.downloadUrl || result?.result?.url || result?.data?.dl || result?.dl;
-    if (!downloadUrl) throw new Error(`API ${apiUrl} did not return a valid download link.`);
-
-    const file = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
-    return file.data;
-}
 
 const play2Command = {
   name: "play2",
   category: "descargas",
-  description: "Busca y descarga un video en formato MP4 usando múltiples métodos.",
+  description: "Busca y descarga un video en formato MP4.",
 
   async execute({ sock, msg, args }) {
     if (args.length === 0) return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de un video." }, { quoted: msg });
@@ -36,39 +23,18 @@ const play2Command = {
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando video...` }, { edit: waitingMsg.key });
 
-      let videoBuffer;
+      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}&format=video`;
 
-      // --- Fallback System ---
-      try {
-        const tempFilePath = await downloadWithYtdlp(url, true); // true para video
-        videoBuffer = fs.readFileSync(tempFilePath);
-        fs.unlinkSync(tempFilePath);
-      } catch (e1) {
-        console.error("play2: yt-dlp failed:", e1.message);
-        try {
-          const downloadUrl = await downloadWithDdownr(url, true); // true para video
-          const response = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
-          videoBuffer = response.data;
-        } catch (e2) {
-          console.error("play2: ddownr failed:", e2.message);
-          const fallbackApis = [
-            `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}`,
-            `https://mahiru-shiina.vercel.app/download/ytmp4?url=${encodeURIComponent(url)}`,
-            `https://api.agungny.my.id/api/youtube-video?url=${encodeURIComponent(url)}`
-          ];
-          let success = false;
-          for (const apiUrl of fallbackApis) {
-            try {
-              videoBuffer = await downloadWithApi(apiUrl);
-              success = true;
-              break;
-            } catch (e3) {
-              console.error(`API ${apiUrl} failed:`, e3.message);
-            }
-          }
-          if (!success) throw new Error("Todos los métodos de descarga de video han fallado.");
-        }
+      const response = await axios.get(apiUrl);
+      const result = response.data;
+
+      if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
+          throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
       }
+
+      const downloadUrl = result.data.url;
+
+      const videoBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
       if (!videoBuffer) throw new Error("El buffer de video está vacío.");
 
