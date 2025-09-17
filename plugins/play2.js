@@ -24,7 +24,7 @@ const play2Command = {
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando video...` }, { edit: waitingMsg.key });
 
-      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(url)}&format=video`;
+      const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}&format=video`;
 
       const response = await axios.get(apiUrl);
       const result = response.data;
@@ -34,7 +34,6 @@ const play2Command = {
       }
 
       const downloadUrl = result.data.url;
-
       const videoBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
       if (!videoBuffer) throw new Error("El buffer de video está vacío.");

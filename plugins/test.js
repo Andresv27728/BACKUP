@@ -72,7 +72,7 @@ async function handleDownload(sock, msg, selection, testCache, config) {
 
   try {
     const videoInfo = cached.video;
-    const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(videoInfo.url)}&format=${type}`;
+    const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(videoInfo.url)}&format=${type}`;
 
     await sock.sendMessage(msg.key.remoteJid, { text: `Procesando ${type}... (Puede tardar hasta 90 segundos)` }, { quoted: msg });
 

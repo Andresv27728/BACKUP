@@ -1,9 +1,8 @@
 // Este es el manejador de mensajes que usarán los sub-bots y el bot principal.
 import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
-import { readSettingsDb, readMaintenanceDb, readUsersDb, writeUsersDb } from './lib/database.js';
+import { readSettingsDb, readMaintenanceDb } from './lib/database.js';
 import print from './lib/print.js';
-import { handleAutoDownload } from './lib/autodl.js';
 
 const COOLDOWN_SECONDS = 5;
 const RESPONSE_DELAY_MS = 2000;
@@ -24,34 +23,7 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     const from = msg.key.remoteJid;
     let body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
-    // --- Lógica de Conteo de Mensajes ---
-    const isGroupMsg = from.endsWith('@g.us');
-    if (isGroupMsg) {
-      try {
-        const users = readUsersDb();
-        if (users[senderId]) {
-          if (!users[senderId].groups) {
-            users[senderId].groups = {};
-          }
-          if (!users[senderId].groups[from]) {
-            users[senderId].groups[from] = { messageCount: 0 };
-          }
-          users[senderId].groups[from].messageCount = (users[senderId].groups[from].messageCount || 0) + 1;
-          writeUsersDb(users);
-        }
-      } catch (e) {
-        console.error("Error al contar mensajes:", e);
-      }
-    }
-
-    // --- Lógica de Auto-Descarga ---
     const settings = readSettingsDb();
-    const isGroup = from.endsWith('@g.us');
-    if (isGroup && settings[from]?.autoDl) {
-      // No se espera a que termine para no bloquear el resto del bot.
-      handleAutoDownload(sock, msg, body);
-    }
-
     const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
 
     let commandName;

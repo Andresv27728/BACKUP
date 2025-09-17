@@ -228,6 +228,7 @@ async function connectToWhatsApp() {
     logger,
     
     browser: usingCode ? Browsers.macOS('Safari') : ['GaaraUltraMD', 'Chrome', '1.0.0'],
+    printQRInTerminal: option === '1',
     markOnlineOnConnect: false,
     syncFullHistory: false,
     generateHighQualityLinkPreview: false

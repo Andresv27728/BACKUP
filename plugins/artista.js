@@ -1,8 +1,7 @@
-import yts from 'yt-search';
 import axios from 'axios';
 import config from '../config.js';
 
-let isDownloadingArtist = false; // Flag para prevenir ejecuciones concurrentes
+let isDownloadingArtist = false;
 
 const artistaCommand = {
   name: "artista",
@@ -44,13 +43,13 @@ const artistaCommand = {
         try {
           await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
 
-          const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(trackUrl)}&format=audio`;
+          const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(trackUrl)}&format=audio`;
 
           const response = await axios.get(apiUrl);
           const result = response.data;
 
           if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
-              throw new Error("La API no devolvió un enlace de descarga válido.");
+            throw new Error("La API no devolvió un enlace de descarga válido.");
           }
 
           const downloadUrl = result.data.url;
@@ -62,10 +61,10 @@ const artistaCommand = {
         } catch (downloadError) {
             console.error(`Falló la descarga de "${trackTitle}":`, downloadError.message);
             await sock.sendMessage(msg.key.remoteJid, { text: `❌ Falló la descarga de *${trackTitle}*. Saltando a la siguiente.` }, { quoted: msg });
-            continue; // Saltar a la siguiente canción
+            continue;
         }
 
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Pequeña pausa
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       await sock.sendMessage(msg.key.remoteJid, { text: "✅ *Descargas Finalizadas Exitosamente.*" }, { quoted: msg });
@@ -74,7 +73,7 @@ const artistaCommand = {
       console.error("Error en el comando artista:", error);
       await sock.sendMessage(msg.key.remoteJid, { text: `❌ *Error:* ${error.message}` }, { quoted: msg });
     } finally {
-      isDownloadingArtist = false; // Liberar el bloqueo
+      isDownloadingArtist = false;
     }
   }
 };

@@ -21,8 +21,11 @@ const config = {
   // APIs (si las tienes, si no, déjalas como están)
   // No es necesario modificar estas si usas las APIs públicas de Adonix.
   api: {
-    gemini: "AIzaSyDEww4IKqba9tgfb8ndMDBOoLkl-nSy4tw", // Tu API Key de Gemini
-    adonix: "AdonixKeyvomkuv5056"
+    adonix: {
+      baseURL: "https://myapiadonix.casacam.net",
+      apiKey: "AdonixKeyvomkuv5056"
+    },
+    gemini: "AIzaSyDEww4IKqba9tgfb8ndMDBOoLkl-nSy4tw" // Tu API Key de Gemini
   },
 
   

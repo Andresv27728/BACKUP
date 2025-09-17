@@ -19,24 +19,25 @@ const playCommand = {
       waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando "${query}"...` }, { quoted: msg });
 
       const searchResults = await yts(query);
-      if (!searchResults.videos.length) throw new Error("No se encontraron resultados.");
+      if (!searchResults.videos.length) {
+        throw new Error("No se encontraron resultados.");
+      }
 
       const videoInfo = searchResults.videos[0];
       const { title, url } = videoInfo;
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando audio...` }, { edit: waitingMsg.key });
 
-      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(url)}&format=audio`;
+      const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}&format=audio`;
 
       const response = await axios.get(apiUrl);
       const result = response.data;
 
       if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
-          throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
+        throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
       }
 
       const downloadUrl = result.data.url;
-
       const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
       if (!audioBuffer || audioBuffer.length === 0) {
@@ -54,16 +55,9 @@ const playCommand = {
 
     } catch (error) {
       console.error("Error en el comando play:", error);
-      let errorMessage = "Error al descargar la canción.";
-      if (error.response) {
-          errorMessage = `Error de la API: ${error.response.status}`;
-      } else if (error.request) {
-          errorMessage = "La API no respondió.";
-      } else {
-          errorMessage = error.message;
-      }
+      const errorMessage = error.message || "Error al descargar la canción.";
       const errorMsg = { text: `❌ ${errorMessage}` };
-       if (waitingMsg) {
+      if (waitingMsg) {
         await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
       } else {
         await sock.sendMessage(msg.key.remoteJid, errorMsg, { quoted: msg });
