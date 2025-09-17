@@ -1,9 +1,7 @@
-import yts from 'yt-search';
-import fs from 'fs';
 import axios from 'axios';
-import { downloadWithYtdlp, downloadWithDdownr, downloadWithAdonix } from '../lib/downloaders.js';
+import config from '../config.js';
 
-let isDownloadingArtist = false; // Flag para prevenir ejecuciones concurrentes
+let isDownloadingArtist = false;
 
 const artistaCommand = {
   name: "artista",
@@ -26,6 +24,7 @@ const artistaCommand = {
     try {
       waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🔔 Buscando las mejores canciones de *${artistName}*...` }, { quoted: msg });
 
+      // Restore original search logic
       const searchUrl = `https://delirius-apiofc.vercel.app/search/searchtrack?q=${encodeURIComponent(artistName)}`;
       const searchResponse = await axios.get(searchUrl);
       const tracks = searchResponse.data;
@@ -40,36 +39,33 @@ const artistaCommand = {
       for (let i = 0; i < tracksToDownload.length; i++) {
         const track = tracksToDownload[i];
         const trackTitle = track.title || "Título Desconocido";
-        await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
+        const trackUrl = track.url;
 
-        let audioBuffer;
         try {
-          // Plan A: Adonix API
-          const adonixUrl = await downloadWithAdonix(track.url);
-          audioBuffer = (await axios.get(adonixUrl, { responseType: 'arraybuffer' })).data;
-        } catch (e1) {
-          console.error(`artista: Adonix failed for ${trackTitle}:`, e1.message);
-          try {
-            // Plan B: yt-dlp
-            const tempFilePath = await downloadWithYtdlp(track.url, false);
-            audioBuffer = fs.readFileSync(tempFilePath);
-            fs.unlinkSync(tempFilePath);
-          } catch (e2) {
-            console.error(`artista: yt-dlp failed for ${trackTitle}:`, e2.message);
-            try {
-                // Plan C: ddownr
-                const ddownrUrl = await downloadWithDdownr(track.url, false);
-                audioBuffer = (await axios.get(ddownrUrl, { responseType: 'arraybuffer' })).data;
-            } catch (e3) {
-                console.error(`artista: ddownr failed for ${trackTitle}:`, e3.message);
-                await sock.sendMessage(msg.key.remoteJid, { text: `❌ Falló la descarga de *${trackTitle}*. Saltando a la siguiente.` }, { quoted: msg });
-                continue; // Saltar a la siguiente canción
-            }
+          await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
+
+          const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(trackUrl)}&format=audio`;
+
+          const response = await axios.get(apiUrl);
+          const result = response.data;
+
+          if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
+            throw new Error("La API no devolvió un enlace de descarga válido.");
           }
+
+          const downloadUrl = result.data.url;
+          const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+
+          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
+          await sock.sendMessage(msg.key.remoteJid, { text: trackTitle }, { quoted: msg });
+
+        } catch (downloadError) {
+            console.error(`Falló la descarga de "${trackTitle}":`, downloadError.message);
+            await sock.sendMessage(msg.key.remoteJid, { text: `❌ Falló la descarga de *${trackTitle}*. Saltando a la siguiente.` }, { quoted: msg });
+            continue;
         }
 
-        await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Pequeña pausa
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       await sock.sendMessage(msg.key.remoteJid, { text: "✅ *Descargas Finalizadas Exitosamente.*" }, { quoted: msg });
@@ -78,7 +74,7 @@ const artistaCommand = {
       console.error("Error en el comando artista:", error);
       await sock.sendMessage(msg.key.remoteJid, { text: `❌ *Error:* ${error.message}` }, { quoted: msg });
     } finally {
-      isDownloadingArtist = false; // Liberar el bloqueo
+      isDownloadingArtist = false;
     }
   }
 };

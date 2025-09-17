@@ -2,13 +2,14 @@ import yts from 'yt-search';
 import axios from 'axios';
 import config from '../config.js';
 
-const play2Command = {
-  name: "play2",
+const ytmp4Command = {
+  name: "ytmp4",
   category: "descargas",
-  description: "Busca y descarga un video en formato MP4.",
+  description: "Busca y descarga un video de YouTube en formato MP4.",
+  aliases: ["ytvideo"],
 
   async execute({ sock, msg, args }) {
-    if (args.length === 0) return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de un video." }, { quoted: msg });
+    if (args.length === 0) return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre o enlace de un video." }, { quoted: msg });
 
     const query = args.join(' ');
     let waitingMsg;
@@ -43,7 +44,7 @@ const play2Command = {
       await sock.sendMessage(msg.key.remoteJid, { video: videoBuffer, mimetype: 'video/mp4', caption: title }, { quoted: msg });
 
     } catch (error) {
-      console.error("Error final en play2:", error);
+      console.error("Error en el comando ytmp4:", error);
       const errorMsg = { text: `❌ ${error.message}` };
        if (waitingMsg) {
         await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
@@ -54,4 +55,4 @@ const play2Command = {
   }
 };
 
-export default play2Command;
+export default ytmp4Command;

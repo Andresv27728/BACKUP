@@ -1,9 +1,10 @@
 import yts from 'yt-search';
 import axios from 'axios';
+import config from '../config.js';
 
 // --- Helper Functions (adaptadas del código proporcionado) ---
 
-async function showDownloadOptions(sock, msg, videoInfo, testCache, config) {
+async function showDownloadOptions(sock, msg, videoInfo, testCache) {
   try {
     if (videoInfo && videoInfo.seconds > 3780) { // Límite de 63 minutos
       await sock.sendMessage(msg.key.remoteJid, { text: 'El video supera el límite de duración permitido (63 minutos).' }, { quoted: msg });
@@ -40,7 +41,6 @@ async function showDownloadOptions(sock, msg, videoInfo, testCache, config) {
       { index: 2, quickReplyButton: { displayText: '🎬 Video', id: `test video_${senderId}` } }
     ];
 
-    // Mensaje sin vista previa para evitar dependencia de 'sharp'
     const templateMessage = {
       text: message,
       footer: 'Elige una opción',
@@ -55,7 +55,7 @@ async function showDownloadOptions(sock, msg, videoInfo, testCache, config) {
   }
 }
 
-async function handleDownload(sock, msg, selection, testCache, config) {
+async function handleDownload(sock, msg, selection, testCache) {
   const senderId = msg.key.participant || msg.key.remoteJid;
   const requestedId = selection.split('_')[1];
   const type = selection.split('_')[0];
@@ -72,14 +72,16 @@ async function handleDownload(sock, msg, selection, testCache, config) {
 
   try {
     const videoInfo = cached.video;
-    const apiUrl = type === 'audio'
-      ? `${config.api.ytmp3}?url=${videoInfo.url}`
-      : `${config.api.ytmp4}?url=${videoInfo.url}`;
+    const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(videoInfo.url)}&format=${type}`;
 
     await sock.sendMessage(msg.key.remoteJid, { text: `Procesando ${type}... (Puede tardar hasta 90 segundos)` }, { quoted: msg });
 
     const response = await axios.get(apiUrl, { timeout: 90000 });
-    const downloadUrl = response.data.resultado.url;
+
+    if (!response.data || !response.data.status || !response.data.data?.url) {
+      throw new Error("La API no devolvió una URL de descarga válida.");
+    }
+    const downloadUrl = response.data.data.url;
 
     if (!downloadUrl) throw new Error('La API no devolvió una URL de descarga válida.');
 
