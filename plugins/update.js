@@ -1,4 +1,6 @@
 import { exec } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
 
 const updateCommand = {
   name: "update",
@@ -14,16 +16,29 @@ const updateCommand = {
       return;
     }
 
+    const gitDir = join(process.cwd(), '.git');
+    if (!existsSync(gitDir)) {
+        await sock.sendMessage(msg.key.remoteJid, { text: "No se puede actualizar. El bot no parece estar en un repositorio de Git." }, { quoted: msg });
+        return;
+    }
+
     await sock.sendMessage(msg.key.remoteJid, { text: "Iniciando actualización... Descargando los últimos cambios desde GitHub." }, { quoted: msg });
 
     exec('git pull', async (error, stdout, stderr) => {
       if (error) {
         console.error(`Error en git pull: ${error.message}`);
-        await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error durante la actualización:\n\n${error.message}` }, { quoted: msg });
+        let errorMessage = `Ocurrió un error durante la actualización.\n\n*Mensaje de error:*\n${error.message}`;
+        if (error.message.includes('Please commit your changes or stash them before you merge')) {
+            errorMessage += '\n\n*Sugerencia:*\nParece que tienes cambios locales sin guardar. Por favor, guárdalos con `git stash` o deséchalos antes de actualizar.';
+        } else if (error.message.includes('Permission denied')) {
+            errorMessage += '\n\n*Sugerencia:*\nHa ocurrido un error de permisos. Asegúrate de que el bot tiene los permisos correctos para acceder al repositorio de Git.';
+        }
+        await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
         return;
       }
-      if (stderr) {
-         // git pull a menudo usa stderr para mensajes de estado, así que lo tratamos como info
+
+      if (stderr && !stderr.includes('Already up to date.')) {
+        // git pull a menudo usa stderr para mensajes de estado, así que lo tratamos como info
         console.log(`Git stderr: ${stderr}`);
       }
 
