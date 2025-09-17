@@ -1,5 +1,6 @@
 import yts from 'yt-search';
 import axios from 'axios';
+import config from '../config.js';
 
 let isDownloadingArtist = false; // Flag para prevenir ejecuciones concurrentes
 
@@ -43,7 +44,7 @@ const artistaCommand = {
         try {
           await sock.sendMessage(msg.key.remoteJid, { text: `[${i + 1}/${tracksToDownload.length}] Descargando: *${trackTitle}*...` }, { quoted: msg });
 
-          const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(trackUrl)}&format=audio`;
+          const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(trackUrl)}&format=audio`;
 
           const response = await axios.get(apiUrl);
           const result = response.data;
@@ -55,7 +56,8 @@ const artistaCommand = {
           const downloadUrl = result.data.url;
           const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
-          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', caption: trackTitle }, { quoted: msg });
+          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
+          await sock.sendMessage(msg.key.remoteJid, { text: trackTitle }, { quoted: msg });
 
         } catch (downloadError) {
             console.error(`Falló la descarga de "${trackTitle}":`, downloadError.message);

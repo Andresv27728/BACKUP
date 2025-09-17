@@ -72,14 +72,16 @@ async function handleDownload(sock, msg, selection, testCache, config) {
 
   try {
     const videoInfo = cached.video;
-    const apiUrl = type === 'audio'
-      ? `${config.api.ytmp3}?url=${videoInfo.url}`
-      : `${config.api.ytmp4}?url=${videoInfo.url}`;
+    const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(videoInfo.url)}&format=${type}`;
 
     await sock.sendMessage(msg.key.remoteJid, { text: `Procesando ${type}... (Puede tardar hasta 90 segundos)` }, { quoted: msg });
 
     const response = await axios.get(apiUrl, { timeout: 90000 });
-    const downloadUrl = response.data.resultado.url;
+
+    if (!response.data || !response.data.status || !response.data.data?.url) {
+      throw new Error("La API no devolvió una URL de descarga válida.");
+    }
+    const downloadUrl = response.data.data.url;
 
     if (!downloadUrl) throw new Error('La API no devolvió una URL de descarga válida.');
 

@@ -1,5 +1,6 @@
 import yts from 'yt-search';
 import axios from 'axios';
+import config from '../config.js';
 
 const play2Command = {
   name: "play2",
@@ -23,7 +24,7 @@ const play2Command = {
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando video...` }, { edit: waitingMsg.key });
 
-      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}&format=video`;
+      const apiUrl = `https://myapiadonix.casacam.net/download/yt?apikey=${config.api.adonix}&url=${encodeURIComponent(url)}&format=video`;
 
       const response = await axios.get(apiUrl);
       const result = response.data;
