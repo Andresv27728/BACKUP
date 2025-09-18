@@ -1,7 +1,7 @@
 // Este es el manejador de mensajes que usarán los sub-bots y el bot principal.
 import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
-import { readSettingsDb, readMaintenanceDb } from './lib/database.js';
+import { readSettingsDb, writeSettingsDb, readUsersDb, writeUsersDb } from './lib/database.js';
 import print from './lib/print.js';
 
 const COOLDOWN_SECONDS = 5;
@@ -25,6 +25,54 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
 
     const settings = readSettingsDb();
     const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
+
+    // --- Lógica de Anti-Link Mejorada ---
+    const isGroup = from.endsWith('@g.us');
+    if (isGroup && settings[from]?.antilink) {
+      const LINK_REGEX = /https?:\/\/[^\s/$.?#].[^\s]*/i;
+      if (LINK_REGEX.test(body)) {
+        const groupMetadata = await sock.groupMetadata(from);
+        const senderInfo = groupMetadata.participants.find(p => p.id === senderId);
+        const isAdmin = senderInfo?.admin; // 'admin' o 'superadmin'
+
+        // Los administradores no se ven afectados por el antilink
+        if (!isAdmin) {
+          const WHITELISTED_DOMAINS = ['tiktok.com', 'facebook.com', 'youtube.com', 'instagram.com', 'youtu.be', 'fb.watch'];
+          const foundUrl = body.match(LINK_REGEX)[0];
+          const domain = new URL(foundUrl).hostname.replace('www.', '');
+
+          if (!WHITELISTED_DOMAINS.some(d => domain.includes(d))) {
+            const usersDb = readUsersDb();
+            const user = usersDb[senderId];
+
+            if (user) {
+              user.warnings = (user.warnings || 0) + 1;
+              const MAX_WARNINGS = 5;
+
+              // 1. Eliminar el mensaje
+              await sock.sendMessage(from, { delete: msg.key });
+
+              if (user.warnings > MAX_WARNINGS) {
+                // 2. Expulsar al usuario
+                await sock.sendMessage(from, { text: `Adiós, @${senderId.split('@')[0]}. Superaste las ${MAX_WARNINGS} advertencias por enviar enlaces.`, mentions: [senderId] });
+                await sock.groupParticipantsUpdate(from, [senderId], "remove");
+                user.warnings = 0; // Resetear advertencias tras expulsión
+              } else {
+                // 3. Enviar advertencia
+                const warningMessage = `⚠️ *¡Enlace Prohibido!* ⚠️\n\n` +
+                                       `@${senderId.split('@')[0]}, no se permiten enlaces de dominios no autorizados.\n` +
+                                       `**Advertencia ${user.warnings}/${MAX_WARNINGS}**.\n` +
+                                       `Si superas las ${MAX_WARNINGS} advertencias, serás eliminado del grupo.`;
+                await sock.sendMessage(from, { text: warningMessage, mentions: [senderId] });
+              }
+              writeUsersDb(usersDb);
+            }
+            return; // Detener el procesamiento para que no se trate como comando
+          }
+        }
+      }
+    }
+    // --- Fin de la Lógica de Anti-Link ---
 
     let commandName;
     let args;
