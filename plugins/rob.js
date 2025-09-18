@@ -1,22 +1,19 @@
 import { readUsersDb, writeUsersDb } from '../lib/database.js';
 
-const COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas
-const SUCCESS_CHANCE = 0.4; // 40% de éxito
-const PENALTY_AMOUNT = 150;
-
 const robCommand = {
   name: "rob",
   category: "economia",
-  description: "Intenta robar monedas a otro usuario. ¡Cuidado, puedes fallar!",
+  description: "Intenta robar monedas a otro usuario. El éxito depende de tu nivel y el de la víctima.",
   aliases: ["robar"],
 
-  async execute({ sock, msg, config }) {
+  async execute({ sock, msg }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const robber = usersDb[senderId];
+    const COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas
 
     if (!robber) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado. Usa `reg` para registrarte." }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado. Usa `reg`." }, { quoted: msg });
     }
 
     const lastRob = robber.lastRob || 0;
@@ -42,50 +39,44 @@ const robCommand = {
         return sock.sendMessage(msg.key.remoteJid, { text: "No puedes robarte a ti mismo." }, { quoted: msg });
     }
 
-    if ((victim.coins || 0) < PENALTY_AMOUNT) {
+    if ((victim.coins || 0) < 100) { // No robar a pobres
         return sock.sendMessage(msg.key.remoteJid, { text: "La víctima es demasiado pobre, no vale la pena el riesgo." }, { quoted: msg });
     }
 
-    robber.lastRob = now; // Actualizar cooldown independientemente del resultado
+    robber.lastRob = now;
 
-    // Verificar si hay efectos activos
-    let currentSuccessChance = SUCCESS_CHANCE;
-    let luckActive = false;
-    if (robber.effects?.suerte && robber.effects.suerte > Date.now()) {
-      currentSuccessChance = 0.6; // Aumentar la probabilidad de éxito al 60%
-      luckActive = true;
-    } else if (robber.effects?.suerte) {
-      delete robber.effects.suerte; // Limpiar efecto expirado
-    }
+    // La probabilidad de éxito depende de la diferencia de nivel
+    const levelDifference = robber.level - victim.level;
+    const successChance = 0.5 + (levelDifference * 0.05); // 50% base, +/- 5% por cada nivel de diferencia
+    const finalSuccessChance = Math.max(0.1, Math.min(0.9, successChance)); // Clamp between 10% and 90%
 
-    if (Math.random() < currentSuccessChance) {
+    if (Math.random() < finalSuccessChance) {
       // Éxito
-      const stolenPercentage = Math.random() * (0.3 - 0.1) + 0.1; // Roba entre 10% y 30%
-      const stolenAmount = Math.floor(victim.coins * stolenPercentage);
-      const tax = Math.floor(stolenAmount * config.taxRate);
-      const netStolen = stolenAmount - tax;
+      const maxSteal = victim.coins * 0.25; // Roba hasta el 25%
+      const stolenAmount = Math.floor(Math.random() * maxSteal) + 1;
 
-      robber.coins += netStolen;
-      victim.coins -= stolenAmount; // La víctima pierde el monto total
+      robber.coins += stolenAmount;
+      victim.coins -= stolenAmount;
+
+      const xpGained = Math.floor(stolenAmount / 10); // Gana XP basado en el robo
+      robber.xp += xpGained;
 
       writeUsersDb(usersDb);
 
-      let successMessage = `🚨 ¡Robo exitoso! 🚨\n\nLe has robado *${stolenAmount} coins* a *${victim.name}*.\n` +
-                           `💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n` +
-                           `💰 Ganancia neta: *${netStolen} coins*.`;
+      const successMessage = `🚨 *¡Robo exitoso!* 🚨\n\n` +
+                             `Le has robado *${stolenAmount.toLocaleString()} monedas* a @${mentionedJid.split('@')[0]}.\n` +
+                             `También ganaste *${xpGained} XP*.`;
 
-      if (luckActive) {
-        successMessage += "\n\n✨ *¡Tu Poción de Suerte te ha ayudado!*";
-      }
-
-      await sock.sendMessage(msg.key.remoteJid, { text: successMessage, contextInfo: { mentionedJid: [mentionedJid] } }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: successMessage, mentions: [mentionedJid] }, { quoted: msg });
 
     } else {
       // Fracaso
-      robber.coins = Math.max(0, robber.coins - PENALTY_AMOUNT);
+      const penalty = Math.floor(robber.coins * 0.1); // Pierde 10% de sus monedas
+      robber.coins -= penalty;
       writeUsersDb(usersDb);
 
-      const failMessage = `🚓 ¡Te atraparon! 🚓\n\nFallaste el robo y perdiste *${PENALTY_AMOUNT} coins* como multa.`;
+      const failMessage = `🚓 *¡Te atraparon!* 🚓\n\n` +
+                          `Fallaste el robo y perdiste *${penalty.toLocaleString()} monedas* como multa.`;
       await sock.sendMessage(msg.key.remoteJid, { text: failMessage }, { quoted: msg });
     }
   }
