@@ -2,6 +2,7 @@
 import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
 import { readSettingsDb, readMaintenanceDb } from './lib/database.js';
+import { handleUrlDownload } from './lib/downloaders.js';
 import print from './lib/print.js';
 
 const COOLDOWN_SECONDS = 5;
@@ -25,18 +26,36 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
 
     const settings = readSettingsDb();
     const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
+    const globalPrefix = config.prefix; // Asumiendo que podría haber un prefijo global en config
+
+    // --- Lógica de Auto-Descarga ---
+    const isGroup = from.endsWith('@g.us');
+    const isCommand = (groupPrefix && body.startsWith(groupPrefix)) || (globalPrefix && body.startsWith(globalPrefix));
+
+    if (isGroup && !isCommand && settings[from]?.autodl) {
+      const URL_REGEX = /https?:\/\/[^\s/$.?#].[^\s]*/i;
+      const foundUrl = body.match(URL_REGEX);
+
+      if (foundUrl) {
+        const url = foundUrl[0];
+        const handled = await handleUrlDownload(url, sock, msg);
+        if (handled) {
+          return; // Detener el procesamiento si se manejó una URL
+        }
+      }
+    }
+    // --- Fin de Lógica de Auto-Descarga ---
 
     let commandName;
     let args;
 
     if (groupPrefix) {
-      if (!body.startsWith(groupPrefix)) return;
+      if (!body.startsWith(groupPrefix)) return; // Si no empieza con el prefijo del grupo, no es comando
       body = body.slice(groupPrefix.length);
       args = body.trim().split(/ +/).slice(1);
       commandName = body.trim().split(/ +/)[0].toLowerCase();
     } else {
-      // Si hay prefijo global o si no hay prefijo de grupo, procesar normal
-      const globalPrefix = config.prefix; // Asumiendo que podría haber un prefijo global en config
+      // Procesar con prefijo global si existe
       if (globalPrefix && !body.startsWith(globalPrefix)) return;
       if (globalPrefix) body = body.slice(globalPrefix.length);
 
