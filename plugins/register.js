@@ -56,6 +56,10 @@ const registerCommand = {
       lastCrime: 0, // Mover de 'crime.js' para consistencia
       lastWork: 0, // Mover de 'work.js' para consistencia
       lastFish: 0, // Mover de 'fish.js' para consistencia
+      lastBeg: 0, // Cooldown para mendigar
+
+      // Economía
+      bank: 0,
 
       // Inventario y Equipamiento
       inventory: {

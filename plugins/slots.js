@@ -1,64 +1,67 @@
 import { readUsersDb, writeUsersDb } from '../lib/database.js';
+import config from '../config.js';
 
 const slotsCommand = {
   name: "slots",
   category: "economia",
-  description: "Juega a la máquina tragamonedas. Uso: slots <cantidad>",
-  aliases: ["slot"],
+  description: "Juega a la máquina tragamonedas y prueba tu suerte. Uso: slots <apuesta>",
+  aliases: ["slot", "tragamonedas"],
 
-  async execute({ sock, msg, args, config }) {
+  async execute({ sock, msg, args }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const user = usersDb[senderId];
+    const MIN_BET = 10;
 
     if (!user) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado. Usa el comando `reg` para registrarte." }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado. Usa `reg`." }, { quoted: msg });
     }
 
     const bet = parseInt(args[0]);
-    if (isNaN(bet) || bet <= 0) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, introduce una cantidad válida para apostar." }, { quoted: msg });
+    if (isNaN(bet) || bet < MIN_BET) {
+      return sock.sendMessage(msg.key.remoteJid, { text: `Debes apostar al menos ${MIN_BET} monedas.` }, { quoted: msg });
     }
 
     if (user.coins < bet) {
-      return sock.sendMessage(msg.key.remoteJid, { text: `No tienes suficientes monedas para apostar. Saldo actual: ${user.coins}` }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, { text: `No tienes suficientes monedas para apostar ${bet}. Saldo actual: ${user.coins}` }, { quoted: msg });
     }
 
-    const emojis = ["🍒", "🍋", "🍊", "🍉", "🍇", "💎"];
+    user.coins -= bet; // Cobrar la apuesta por adelantado
+
+    const emojis = ["🍒", "🍋", "🍊", "🍉", "🍇", "💎", "🔔", " BAR "];
     const results = [
       emojis[Math.floor(Math.random() * emojis.length)],
       emojis[Math.floor(Math.random() * emojis.length)],
       emojis[Math.floor(Math.random() * emojis.length)]
     ];
 
-    const resultString = `[ ${results.join(" | ")} ]`;
+    const resultString = `\n\n[ ${results.join(" | ")} ]\n\n`;
     let winAmount = 0;
-    let tax = 0;
-    let netWin = 0;
-    let winMessage = "";
 
-    if (results[0] === results[1] && results[1] === results[2]) {
-      // 3 of a kind
+    const [r1, r2, r3] = results;
+
+    if (r1 === "💎" && r2 === "💎" && r3 === "💎") {
+      winAmount = bet * 20;
+    } else if (r1 === r2 && r2 === r3) {
       winAmount = bet * 10;
-      tax = Math.floor(winAmount * config.taxRate);
-      netWin = winAmount - tax;
-      winMessage = `¡JACKPOT! ¡Has ganado ${winAmount} coins! 🎉\n(Impuesto: ${tax} coins)`;
-    } else if (results[0] === results[1] || results[1] === results[2] || results[0] === results[2]) {
-      // 2 of a kind
-      winAmount = bet * 2;
-      tax = Math.floor(winAmount * config.taxRate);
-      netWin = winAmount - tax;
-      winMessage = `¡Dos iguales! ¡Has ganado ${winAmount} coins!\n(Impuesto: ${tax} coins)`;
-    } else {
-      // No win
-      netWin = -bet; // La pérdida es la apuesta completa
-      winMessage = `¡Mala suerte! Has perdido ${bet} coins.`;
+    } else if (r1 === r2 || r2 === r3 || r1 === r3) {
+      winAmount = bet * 3;
     }
 
-    user.coins += netWin;
+    let message;
+    if (winAmount > 0) {
+      const tax = Math.floor(winAmount * config.taxRate);
+      const netWin = winAmount - tax;
+      user.coins += netWin;
+      message = `*¡FELICIDADES!* Ganaste *${winAmount.toLocaleString()}* monedas.\n` +
+                `Tras un impuesto de *${tax.toLocaleString()}*, recibes *${netWin.toLocaleString()}*.\n`;
+    } else {
+      message = "¡Mala suerte! Sigue intentándolo.";
+    }
+
     writeUsersDb(usersDb);
 
-    const finalMessage = `🎰 *Tragamonedas* 🎰\n\n${resultString}\n\n${winMessage}\n\n*Nuevo saldo:* ${user.coins} coins`;
+    const finalMessage = `🎰 *Tragamonedas* 🎰\n*Apuesta:* ${bet.toLocaleString()}\n${resultString}${message}\n*Saldo final:* ${user.coins.toLocaleString()} monedas.`;
     await sock.sendMessage(msg.key.remoteJid, { text: finalMessage }, { quoted: msg });
   }
 };
