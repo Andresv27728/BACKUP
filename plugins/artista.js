@@ -1,12 +1,13 @@
 import axios from 'axios';
-import config from '../config.js';
+import { downloadWithYtdlp, downloadWithDdownr } from '../lib/downloaders.js'; // Usar nuestros descargadores robustos
+import fs from 'fs';
 
 let isDownloadingArtist = false;
 
 const artistaCommand = {
   name: "artista",
   category: "descargas",
-  description: "Descarga las 10 canciones más populares de un artista.",
+  description: "Descarga hasta 50 canciones de un artista y las envía en lotes.",
 
   async execute({ sock, msg, args }) {
     if (isDownloadingArtist) {
@@ -32,40 +33,46 @@ const artistaCommand = {
         throw new Error("No se encontraron resultados para ese artista.");
       }
 
-      const tracksToDownload = tracks.slice(0, 10);
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontradas ${tracksToDownload.length} canciones. Iniciando descargas en orden...` }, { edit: waitingMsg.key });
+      const tracksToDownload = tracks.slice(0, 50);
+      const totalTracks = tracksToDownload.length;
+      const totalBatches = Math.ceil(totalTracks / 10);
 
-      for (let i = 0; i < tracksToDownload.length; i++) {
-        const track = tracksToDownload[i];
-        const trackTitle = track.title || "Título Desconocido";
-        const trackUrl = track.url;
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontradas ${totalTracks} canciones. Se enviarán en ${totalBatches} lotes.` }, { edit: waitingMsg.key });
 
-        try {
-          const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(trackUrl)}&format=audio`;
+      for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+        const start = batchNum * 10;
+        const end = start + 10;
+        const currentBatch = tracksToDownload.slice(start, end);
 
-          const response = await axios.get(apiUrl);
-          const result = response.data;
+        await sock.sendMessage(msg.key.remoteJid, { text: `📦 Enviando lote ${batchNum + 1} de ${totalBatches}...` }, { quoted: msg });
 
-          if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
-            throw new Error("La API no devolvió un enlace de descarga válido.");
-          }
+        for (let i = 0; i < currentBatch.length; i++) {
+          const track = currentBatch[i];
+          const trackTitle = track.title || "Título Desconocido";
+          const trackUrl = track.url;
+          let tempPath;
 
-          const downloadUrl = result.data.url;
-          const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+          try {
+            await sock.sendMessage(msg.key.remoteJid, { text: `⏳ Descargando (${i + 1}/10): *${trackTitle}*` }, { quoted: msg });
+            tempPath = await downloadWithYtdlp(trackUrl, false); // false for audio
+            const audioBuffer = fs.readFileSync(tempPath);
 
-          // Se envía solo el audio para minimizar el spam
-          await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', fileName: `${trackTitle}.mp3` }, { quoted: msg });
+            await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg', fileName: `${trackTitle}.mp3` }, { quoted: msg });
 
-        } catch (downloadError) {
+          } catch (downloadError) {
             console.error(`Falló la descarga de "${trackTitle}":`, downloadError.message);
             await sock.sendMessage(msg.key.remoteJid, { text: `❌ Falló la descarga de *${trackTitle}*. Saltando a la siguiente.` }, { quoted: msg });
-            continue;
+          } finally {
+            // Limpiar el archivo temporal después de cada descarga
+            if (tempPath && fs.existsSync(tempPath)) {
+              fs.unlinkSync(tempPath);
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos entre canciones
         }
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      await sock.sendMessage(msg.key.remoteJid, { text: "✅ *Descargas Finalizadas Exitosamente.*" }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: "✅ *Proceso finalizado.* Se han enviado todos los lotes." }, { quoted: msg });
 
     } catch (error) {
       console.error("Error en el comando artista:", error);
