@@ -73,7 +73,8 @@ const registerCommand = {
         weapon: null,
         armor: null,
         shield: null
-      }
+      },
+      effects: {} // Para almacenar efectos temporales (ej. poción de suerte)
     };
 
     writeUsersDb(usersDb);
