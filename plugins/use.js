@@ -3,58 +3,91 @@ import { shopItems } from '../lib/shop-items.js';
 
 const useCommand = {
   name: "use",
-  category: "economia",
-  description: "Usa un artículo de tu inventario.",
+  category: "rpg",
+  description: "Usa un objeto de tu inventario. Uso: `use <id_del_objeto>`",
   aliases: ["usar"],
 
   async execute({ sock, msg, args }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const user = usersDb[senderId];
+    const itemId = args[0]?.toLowerCase();
 
     if (!user) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado." }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado. Usa `reg`." }, { quoted: msg });
     }
 
-    const itemIdToUse = args[0]?.toLowerCase();
-    if (!itemIdToUse) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Especifica el ID del artículo que quieres usar. Ejemplo: `use suerte`" }, { quoted: msg });
+    if (!itemId) {
+      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, especifica el ID del objeto que quieres usar. Revisa tu `inventory`." }, { quoted: msg });
     }
 
-    if (!user.inventory || !user.inventory[itemIdToUse] || user.inventory[itemIdToUse] < 1) {
-      return sock.sendMessage(msg.key.remoteJid, { text: `No tienes "${itemIdToUse}" en tu inventario.` }, { quoted: msg });
+    if (!user.inventory || !user.inventory[itemId] || user.inventory[itemId] <= 0) {
+      return sock.sendMessage(msg.key.remoteJid, { text: `No tienes "${itemId}" en tu inventario.` }, { quoted: msg });
     }
 
-    const item = shopItems.find(i => i.id === itemIdToUse);
+    const item = shopItems.find(i => i.id === itemId);
     if (!item) {
-        // This case should be rare if inventory is managed properly
-        return sock.sendMessage(msg.key.remoteJid, { text: "Parece que tienes un artículo fantasma. No se puede usar." }, { quoted: msg });
+        return sock.sendMessage(msg.key.remoteJid, { text: "Ocurrió un error, el objeto no se encuentra en la lista de objetos." }, { quoted: msg });
     }
 
-    // --- Lógica para cada artículo consumible ---
-    let effectApplied = false;
-    let effectMessage = "";
+    let message = "";
+    let consumeItem = true; // La mayoría de los objetos se consumen
 
-    if (itemIdToUse === 'suerte') {
-      if (!user.effects) user.effects = {};
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      user.effects.suerte = Date.now() + twentyFourHours;
-      effectApplied = true;
-      effectMessage = "¡Has usado una Poción de Suerte! Tu probabilidad de éxito en los robos ha aumentado por 24 horas.";
-    } else {
-      return sock.sendMessage(msg.key.remoteJid, { text: `El artículo "${item.name}" no es un consumible o su efecto aún no ha sido implementado.` }, { quoted: msg });
+    // Lógica de efectos de los objetos
+    switch (itemId) {
+      case 'pocion_vida':
+        if (user.hp >= user.maxHp) {
+          return sock.sendMessage(msg.key.remoteJid, { text: "Ya tienes la salud al máximo." }, { quoted: msg });
+        }
+        const healAmount = Math.floor(user.maxHp * 0.5); // Cura 50%
+        user.hp = Math.min(user.maxHp, user.hp + healAmount);
+        message = `Usaste una *Poción de Vida Menor* y recuperaste *${healAmount} HP*. Salud actual: ${user.hp}/${user.maxHp} ❤️`;
+        break;
+
+      case 'trebol':
+      case 'suerte': // Aceptar el ID antiguo también
+        const luckDuration = 1 * 60 * 60 * 1000; // 1 hora
+        user.effects.suerte = Date.now() + luckDuration;
+        message = `🍀 Usaste un *Trébol de 4 Hojas*. ¡Tu suerte ha aumentado por 1 hora!`;
+        break;
+
+      case 'elixir':
+        const xpBoostDuration = 30 * 60 * 1000; // 30 minutos
+        user.effects.xp_boost = Date.now() + xpBoostDuration;
+        message = `🧠 Usaste un *Elixir de Sabiduría*. ¡Ganas el doble de experiencia por 30 minutos!`;
+        break;
+
+      case 'galleta':
+        const fortunes = ["Un gran viaje te espera.", "Cuidado con los goblins con sombrero.", "Pronto recibirás una ganancia inesperada.", "El número 7 será tu aliado hoy."];
+        message = `Abres la galleta de la fortuna y lees: "${fortunes[Math.floor(Math.random() * fortunes.length)]}"`;
+        break;
+
+      case 'roca':
+        message = `Miras fijamente a tu *Roca Mascota*. Ella te devuelve la mirada. Ha sido un momento profundo.`;
+        consumeItem = false; // No se consume la roca mascota
+        break;
+
+      case 'cofre':
+        const min = item.price * 0.5;
+        const max = item.price * 2.0;
+        const amount = Math.floor(Math.random() * (max - min + 1)) + min;
+        user.coins += amount;
+        message = `¡Abriste el cofre y encontraste *${amount.toLocaleString()} monedas*!`;
+        break;
+
+      default:
+        return sock.sendMessage(msg.key.remoteJid, { text: `El objeto "${item.name}" no es consumible o su efecto aún no ha sido implementado.` }, { quoted: msg });
     }
 
-    if (effectApplied) {
-      // Decrementar o eliminar el artículo del inventario
-      user.inventory[itemIdToUse] -= 1;
-      if (user.inventory[itemIdToUse] <= 0) {
-        delete user.inventory[itemIdToUse];
-      }
-
-      writeUsersDb(usersDb);
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ ${effectMessage}` }, { quoted: msg });
+    if (consumeItem) {
+        user.inventory[itemId]--;
+        if (user.inventory[itemId] <= 0) {
+            delete user.inventory[itemId];
+        }
     }
+
+    writeUsersDb(usersDb);
+    await sock.sendMessage(msg.key.remoteJid, { text: message }, { quoted: msg });
   }
 };
 
