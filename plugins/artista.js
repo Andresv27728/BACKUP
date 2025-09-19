@@ -1,4 +1,5 @@
 import { downloadArtistSongs } from '../lib/artistDownloader.js';
+import config from '../config.js';
 
 // Estado de descarga específico para el comando 'artista'
 const downloadingState = { isDownloading: false };
@@ -14,7 +15,8 @@ const artistaCommand = {
       msg,
       args,
       commandName: this.name,
-      downloadingState
+      downloadingState,
+      apiConfig: config.api.adonix // Usa la API de Adonix, como en 'play'
     });
   }
 };
