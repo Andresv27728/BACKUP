@@ -1,4 +1,4 @@
-import { downloadArtistSongs } from '../lib/artistDownloader.js';
+import { downloadArtistMedia } from '../lib/artistDownloader.js';
 import config from '../config.js';
 
 // Estado de descarga específico para el comando 'artista'
@@ -10,13 +10,14 @@ const artistaCommand = {
   description: "Descarga las 50 canciones más populares de un artista y las envía una por una.",
 
   async execute({ sock, msg, args }) {
-    await downloadArtistSongs({
+    await downloadArtistMedia({
       sock,
       msg,
       args,
       commandName: this.name,
       downloadingState,
-      apiConfig: config.api.adonix // Usa la API de Adonix, como en 'play'
+      apiConfig: config.api.adonix,
+      format: 'audio'
     });
   }
 };
