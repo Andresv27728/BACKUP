@@ -1,10 +1,10 @@
 import { downloadArtistSongs } from '../lib/artistDownloader.js';
 
-// Estado de descarga específico para el comando 'artista'
+// Estado de descarga específico para el comando 'artista2'
 const downloadingState = { isDownloading: false };
 
-const artistaCommand = {
-  name: "artista",
+const artista2Command = {
+  name: "artista2",
   category: "descargas",
   description: "Descarga las 50 canciones más populares de un artista y las envía una por una.",
 
@@ -19,4 +19,4 @@ const artistaCommand = {
   }
 };
 
-export default artistaCommand;
+export default artista2Command;
