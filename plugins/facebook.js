@@ -1,4 +1,5 @@
-import { facebookDl } from '../lib/scraper.js';
+import axios from 'axios';
+import config from '../config.js';
 
 const facebookCommand = {
   name: "facebook",
@@ -14,36 +15,44 @@ const facebookCommand = {
       return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de Facebook." }, { quoted: msg });
     }
 
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video de Facebook...` }, { quoted: msg });
 
     try {
-      const links = await facebookDl(url);
-      if (!links || Object.keys(links).length === 0) {
-        throw new Error("No se pudieron obtener los enlaces de descarga.");
+      const apiUrl = `${config.api.adonix.baseURL}/download/facebook?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
+      const response = await axios.get(apiUrl);
+      const data = response.data;
+
+      if (!data.status || !data.result || !data.result.media) {
+        throw new Error("La respuesta de la API no es válida o no contiene medios.");
       }
 
-      // Prioritize HD over SD
-      const downloadUrl = links['HD'] || links['SD'];
+      const media = data.result.media;
+      const downloadUrl = media.video_hd || media.video_sd;
 
       if (!downloadUrl) {
-        throw new Error("No se pudo obtener la URL de descarga del video.");
+        throw new Error("No se pudo obtener la URL de descarga del video desde la API.");
       }
+
+      const videoBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+      const caption = data.result.info.title || "¡Aquí tienes tu video de Facebook!";
 
       await sock.sendMessage(
         msg.key.remoteJid,
         {
-          video: { url: downloadUrl },
-          caption: `✨ ¡Aquí tienes tu video de Facebook!`,
+          video: videoBuffer,
+          caption: caption,
           mimetype: 'video/mp4'
         },
         { quoted: msg }
       );
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ ¡Video enviado!`, edit: waitingMsg.key });
+      // Eliminar el mensaje de "Procesando..."
+      await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
 
     } catch (error) {
-      console.error("Error en el comando facebook:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. El enlace puede ser inválido, privado o el servicio de descarga estar fallando.`, edit: waitingMsg.key, quoted: msg });
+      console.error("Error en el comando facebook:", error.message);
+      const errorMessage = "❌ Ocurrió un error. El enlace puede ser inválido, privado o el servicio de descarga estar fallando.";
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage, edit: waitingMsg.key });
     }
   }
 };
