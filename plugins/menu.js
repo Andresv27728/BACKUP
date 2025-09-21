@@ -44,7 +44,13 @@ const borders = [
   { top: "♠━", mid: "┃", bot: "━♠" },
   { top: "♣━", mid: "┃", bot: "━♣" },
   { top: "♥━", mid: "┃", bot: "━♥" },
-  { top: "♦━", mid: "┃", bot: "━♦" }
+  { top: "♦━", mid: "┃", bot: "━♦" },
+  // Nuevos estilos más limpios
+  { top: "╭─⏣", mid: "│", bot: "╰───────────⏣" },
+  { top: "╔═⟩", mid: "║", bot: "╚═══════════⟩" },
+  { top: "┌─◉", mid: "│", bot: "└───────────◉" },
+  { top: "╭┈➤", mid: "│", bot: "╰───────────➤" },
+  { top: "┏・", mid: "┃", bot: "┗━━━━━━━━━━・" }
 ];
 
 const menuCommand = {
