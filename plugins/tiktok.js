@@ -1,4 +1,5 @@
-import axios from 'axios';
+import { fetchWithRetry } from '../lib/apiHelper.js';
+import config from '../config.js';
 
 const tiktokCommand = {
   name: "tiktok",
@@ -17,8 +18,8 @@ const tiktokCommand = {
     const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video de TikTok...` }, { quoted: msg });
 
     try {
-      const apiUrl = `https://myapiadonix.casacam.net/download/tiktok?apikey=AdonixKeyvomkuv5056&url=${encodeURIComponent(url)}`;
-      const response = await axios.get(apiUrl);
+      const apiUrl = `${config.api.adonix.baseURL}/download/tiktok?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
+      const response = await fetchWithRetry(apiUrl);
 
       if (response.data.status !== "true" || !response.data.data || !response.data.data.video) {
         throw new Error('La API no devolvió un video válido o el enlace es incorrecto.');
@@ -27,23 +28,25 @@ const tiktokCommand = {
       const { title, author, video } = response.data.data;
       const videoUrl = video;
 
-      const caption = `*Título:* ${title}\n*Autor:* ${author.name} (@${author.username})`;
+      const videoBuffer = (await fetchWithRetry(videoUrl, { responseType: 'arraybuffer' })).data;
+      const caption = `*${title}*\n\n*Autor:* ${author.name} (@${author.username})`;
 
       await sock.sendMessage(
         msg.key.remoteJid,
         {
-          video: { url: videoUrl },
+          video: videoBuffer,
           caption: caption,
           mimetype: 'video/mp4'
         },
         { quoted: msg }
       );
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ ¡Video enviado!`, edit: waitingMsg.key });
+      await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
 
     } catch (error) {
-      console.error("Error en el comando tiktok:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. ${error.message}`, edit: waitingMsg.key, quoted: msg });
+      console.error("Error en el comando tiktok:", error.message);
+      const errorMessage = "❌ No se pudo descargar el video de TikTok. El servicio puede no estar disponible o el enlace ser inválido. Por favor, inténtalo de nuevo más tarde.";
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage, edit: waitingMsg.key });
     }
   }
 };
