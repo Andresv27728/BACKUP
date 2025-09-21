@@ -47,7 +47,7 @@ const menuCommand = {
     const sortedCategories = Object.keys(categories).sort();
 
     // 🔱 --- Construcción del menú ---
-    let menuText = `${border.top} *GURA'S COMMANDS* 🔱』\n`;
+    let menuText = `${border.top} *GURA* 🔱』\n`;
     menuText += `${border.mid} Hey, *${senderName}*!\n`;
     menuText += `${border.mid} Bot Name: *${config.botName}*\n`;
     menuText += `${border.mid} By: *${config.ownerName}*\n`;
