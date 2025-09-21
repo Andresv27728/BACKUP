@@ -1,6 +1,7 @@
 import yts from 'yt-search';
 import axios from 'axios';
 import config from '../config.js';
+import { fetchWithRetry } from '../lib/apiHelper.js';
 
 const playCommand = {
   name: "play",
@@ -26,7 +27,7 @@ const playCommand = {
 
       const apiUrl = `${config.api.adonix.baseURL}/download/ytmp3?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
 
-      const response = await axios.get(apiUrl);
+      const response = await fetchWithRetry(apiUrl);
       const result = response.data;
 
       if (!result.status || !result.data || !result.data.url) {
@@ -36,7 +37,8 @@ const playCommand = {
       const downloadUrl = result.data.url;
       const title = result.data.title || originalTitle;
 
-      const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+      const audioResponse = await fetchWithRetry(downloadUrl, { responseType: 'arraybuffer' });
+      const audioBuffer = audioResponse.data;
 
       if (!audioBuffer || audioBuffer.length === 0) {
         throw new Error("No se pudo obtener el audio de la API.");
@@ -51,8 +53,8 @@ const playCommand = {
 
     } catch (error) {
       console.error("Error en el comando play:", error);
-      const errorMessage = error.message || "Error al descargar la canción.";
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ ${errorMessage}` }, { quoted: msg });
+      const errorMessage = "❌ No se pudo descargar la canción. El servicio puede no estar disponible. Por favor, inténtalo de nuevo más tarde.";
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
     }
   }
 };

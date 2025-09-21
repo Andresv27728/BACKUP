@@ -1,6 +1,7 @@
 import yts from 'yt-search';
 import axios from 'axios';
 import config from '../config.js';
+import { fetchWithRetry } from '../lib/apiHelper.js';
 
 const play2Command = {
   name: "play2",
@@ -26,7 +27,7 @@ const play2Command = {
 
       const apiUrl = `${config.api.adonix.baseURL}/download/ytmp4?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
 
-      const response = await axios.get(apiUrl);
+      const response = await fetchWithRetry(apiUrl);
       const result = response.data;
 
       if (!result.status || !result.data || !result.data.url) {
@@ -38,7 +39,8 @@ const play2Command = {
 
       await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${title}*` }, { quoted: msg });
 
-      const videoBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+      const videoResponse = await fetchWithRetry(downloadUrl, { responseType: 'arraybuffer' });
+      const videoBuffer = videoResponse.data;
 
       if (!videoBuffer) {
         throw new Error("El buffer de video está vacío.");
@@ -48,7 +50,8 @@ const play2Command = {
 
     } catch (error) {
       console.error("Error final en play2:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ ${error.message}` }, { quoted: msg });
+      const errorMessage = "❌ No se pudo descargar el video. El servicio puede no estar disponible. Por favor, inténtalo de nuevo más tarde.";
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
     }
   }
 };

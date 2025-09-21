@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { fetchWithRetry } from '../lib/apiHelper.js';
 import config from '../config.js';
 
 const facebookCommand = {
@@ -19,7 +19,7 @@ const facebookCommand = {
 
     try {
       const apiUrl = `${config.api.adonix.baseURL}/download/facebook?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
-      const response = await axios.get(apiUrl);
+      const response = await fetchWithRetry(apiUrl);
       const data = response.data;
 
       if (!data.status || !data.result || !data.result.media) {
@@ -33,7 +33,8 @@ const facebookCommand = {
         throw new Error("No se pudo obtener la URL de descarga del video desde la API.");
       }
 
-      const videoBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
+      const videoResponse = await fetchWithRetry(downloadUrl, { responseType: 'arraybuffer' });
+      const videoBuffer = videoResponse.data;
       const caption = data.result.info.title || "¡Aquí tienes tu video de Facebook!";
 
       await sock.sendMessage(
@@ -51,7 +52,7 @@ const facebookCommand = {
 
     } catch (error) {
       console.error("Error en el comando facebook:", error.message);
-      const errorMessage = "❌ Ocurrió un error. El enlace puede ser inválido, privado o el servicio de descarga estar fallando.";
+      const errorMessage = "❌ No se pudo descargar el video de Facebook. El servicio puede no estar disponible o el enlace ser inválido. Por favor, inténtalo de nuevo más tarde.";
       await sock.sendMessage(msg.key.remoteJid, { text: errorMessage, edit: waitingMsg.key });
     }
   }
