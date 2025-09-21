@@ -22,7 +22,7 @@ const config = {
   // No es necesario modificar estas si usas las APIs públicas de Adonix.
   api: {
     adonix: {
-      baseURL: "https://myapiadonix.casacam.net",
+      baseURL: "https://api-adonix.ultraplus.click",
       apiKey: "AdonixKeyvomkuv5056"
     },
     gemini: "AIzaSyDEww4IKqba9tgfb8ndMDBOoLkl-nSy4tw" // Tu API Key de Gemini
