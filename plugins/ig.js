@@ -62,7 +62,11 @@ const instagramCommand = {
         }
       }
 
-      await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
+      try {
+        await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
+      } catch (deleteError) {
+        console.error("Error al eliminar el mensaje de espera en ig.js:", deleteError);
+      }
 
     } catch (err) {
       console.error("❌ Error en comando Instagram:", err);
