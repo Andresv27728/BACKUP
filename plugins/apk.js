@@ -1,75 +1,81 @@
-import { search, download } from 'aptoide-scraper';
-import { readUsersDb, writeUsersDb } from '../lib/database.js';
 import axios from 'axios';
+import config from '../config.js';
 
 const apkCommand = {
   name: "apk",
   category: "descargas",
-  description: "Busca y descarga una aplicación desde Aptoide. Cuesta 200 coins.",
-  aliases: ["modapk", "aptoide"],
+  description: "Busca y descarga un archivo APK.",
 
   async execute({ sock, msg, args }) {
-    const text = args.join(' ');
+    const text = args.join(" ");
+    const pref = config.prefix || ".";
+
     if (!text) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, ingrese el nombre de la apk para buscar." }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, {
+        text: `⚠️ *Uso incorrecto.*\n✳️ *Ejemplo:* \`${pref}${this.name} whatsapp\``
+      }, { quoted: msg });
     }
 
-    const senderId = msg.sender;
-    const usersDb = readUsersDb();
-    const user = usersDb[senderId];
-    const cost = 200;
-
-    if (!user) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "No estás registrado. Usa el comando `reg` para registrarte." }, { quoted: msg });
-    }
-
-    if (user.coins < cost) {
-      return sock.sendMessage(msg.key.remoteJid, { text: `No tienes suficientes monedas para usar este comando. Necesitas ${cost} coins, pero solo tienes ${user.coins}.` }, { quoted: msg });
-    }
-
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🔎 Buscando "${text}" en Aptoide...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: "⏳ Buscando APK..." }, { quoted: msg });
 
     try {
-      const searchResults = await search(text);
-      if (!searchResults || searchResults.length === 0) {
-        throw new Error("No se encontraron resultados para tu búsqueda.");
+      const apiUrl = `https://api.neoxr.eu/api/apk?q=${encodeURIComponent(text)}&no=1&apikey=russellxz`;
+      const response = await axios.get(apiUrl);
+      const { data } = response;
+
+      if (!data.status || !data.data || !data.file?.url) {
+        throw new Error("No se pudo obtener información del APK.");
       }
 
-      const appInfo = await download(searchResults[0].id);
-      if (!appInfo || !appInfo.dllink) {
-        throw new Error("No se pudo obtener la información de descarga de la aplicación.");
+      const apkInfo = data.data;
+      const apkFile = data.file;
+
+      // Verificar el tamaño del archivo antes de descargar
+      const sizeStr = apkInfo.size;
+      const sizeValue = parseFloat(sizeStr);
+      const isMB = sizeStr.toLowerCase().includes('mb');
+      const sizeMB = isMB ? sizeValue : sizeValue / 1024; // Convertir KB a MB si es necesario
+
+      if (sizeMB > 300) {
+        return sock.sendMessage(msg.key.remoteJid, {
+          text: `❌ El APK pesa ${sizeMB.toFixed(2)}MB y excede el límite de 300MB.`
+        }, { quoted: msg, edit: waitingMsg.key });
       }
 
-      // Cobrar solo si la descarga es posible
-      user.coins -= cost;
-      writeUsersDb(usersDb);
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ APK encontrado. Descargando *${apkInfo.name}* (${apkInfo.size})...` }, { edit: waitingMsg.key });
 
-      let caption = `*乂  APTOIDE - DESCARGAS* 乂\n\n`;
-      caption += `☁️ *Nombre*: ${appInfo.name}\n`;
-      caption += `📦 *Package*: ${appInfo.package}\n`;
-      caption += `⬆️ *Actualizado*: ${appInfo.lastup}\n`;
-      caption += `⚖️ *Peso*: ${appInfo.size}\n\n`;
-      caption += `💸 *Costo:* 200 coins.`;
+      const fileBuffer = (await axios.get(apkFile.url, { responseType: 'arraybuffer' })).data;
 
-      await sock.sendMessage(msg.key.remoteJid, { image: { url: appInfo.icon }, caption: caption }, { quoted: msg });
+      const caption = `📱 *Nombre:* ${apkInfo.name}\n` +
+        `𖠁 *Tamaño:* ${apkInfo.size}\n` +
+        `𖠁 *Rating:* ${apkInfo.rating}\n` +
+        `𖠁 *Instalaciones:* ${apkInfo.installs}\n` +
+        `𖠁 *Desarrollador:* ${apkInfo.developer}\n` +
+        `𖠁 *Categoría:* ${apkInfo.category}\n` +
+        `𖠁 *Versión:* ${apkInfo.version}\n` +
+        `𖠁 *Actualizado:* ${apkInfo.updated}\n` +
+        `𖠁 *Requisitos:* ${apkInfo.requirements}\n` +
+        `𖠁 *ID:* ${apkInfo.id}`;
 
-      await sock.sendMessage(msg.key.remoteJid, { text: "Enviando APK como documento..." }, { edit: waitingMsg.key });
-
-      if (appInfo.size.includes('GB') || parseFloat(appInfo.size.replace(' MB', '')) > 150) {
-        return sock.sendMessage(msg.key.remoteJid, { text: "El archivo es demasiado pesado para ser enviado (> 150 MB)." }, { quoted: msg });
-      }
-
+      // Enviar imagen con info
       await sock.sendMessage(msg.key.remoteJid, {
-        document: { url: appInfo.dllink },
-        mimetype: 'application/vnd.android.package-archive',
-        fileName: `${appInfo.name}.apk`
+        image: { url: apkInfo.thumbnail },
+        caption,
+        mimetype: "image/jpeg"
       }, { quoted: msg });
 
-    } catch (error) {
-      console.error("Error en el comando apk:", error);
-      // No se devuelve el dinero si el error ocurre después de cobrar,
-      // ya que el enlace de descarga se obtuvo, el fallo puede ser de WhatsApp.
-      await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un fallo: ${error.message}` }, { quoted: msg, edit: waitingMsg.key });
+      // Enviar el APK
+      await sock.sendMessage(msg.key.remoteJid, {
+        document: fileBuffer,
+        mimetype: "application/vnd.android.package-archive",
+        fileName: apkFile.filename
+      }, { quoted: msg });
+
+    } catch (err) {
+      console.error("❌ Error en comando APK:", err.message);
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: `❌ *Error al procesar la solicitud:*\n_${err.message}_\n\n🔹 Inténtalo más tarde.`
+      }, { quoted: msg, edit: waitingMsg.key });
     }
   }
 };

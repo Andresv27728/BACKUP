@@ -1,52 +1,76 @@
-import { igStalk } from '../lib/scraper.js';
+import axios from 'axios';
+import config from '../config.js'; // Asumiendo que el prefijo podría estar en config
 
-const igCommand = {
-  name: "ig",
-  category: "informacion",
-  description: "Busca información de un perfil de Instagram.",
+const instagramCommand = {
+  name: "instagram",
+  aliases: ["ig"],
+  category: "descargas",
+  description: "Descarga contenido de Instagram desde un enlace.",
 
   async execute({ sock, msg, args }) {
-    const username = args[0];
-    if (!username) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un nombre de usuario de Instagram." }, { quoted: msg });
+    const text = args.join(" ");
+    const pref = config.prefix || "."; // Usar prefijo de config o '.' por defecto
+
+    if (!text) {
+      return sock.sendMessage(msg.key.remoteJid, {
+        text: `✳️ *Usa:*\n${pref}${this.name} <enlace>\nEj: *${pref}${this.name}* https://www.instagram.com/p/CCoI4DQBGVQ/`
+      }, { quoted: msg });
     }
 
-    try {
-      const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando perfil de @${username}...` }, { quoted: msg });
-      const data = await igStalk(username);
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: "⏳ Procesando..." }, { quoted: msg });
 
-      if (!data) {
-        throw new Error("No se pudo encontrar el perfil.");
+    try {
+      const apiUrl = `https://api.dorratz.com/igdl?url=${encodeURIComponent(text)}`;
+      const response = await axios.get(apiUrl);
+      const { data } = response.data;
+
+      if (!data || data.length === 0) {
+        return sock.sendMessage(msg.key.remoteJid, {
+          text: "❌ *No se pudo obtener el contenido de Instagram.*"
+        }, { quoted: msg, edit: waitingMsg.key });
       }
 
-      const caption = `
-*Información de Instagram*
+      const caption = `🎬 *Contenido IG descargado*\n𖠁 *API:* api.dorratz.com`;
 
-*Nombre:* ${data.name}
-*Username:* ${data.username}
-*Seguidores:* ${data.followersH} (${data.followers})
-*Siguiendo:* ${data.followingH} (${data.following})
-*Posts:* ${data.postsH} (${data.posts})
+      for (const item of data) {
+        // Descargar el buffer directamente
+        const videoRes = await axios.get(item.url, { responseType: "arraybuffer" });
+        const buffer = videoRes.data;
 
-*Descripción:*
-${data.description}
-      `;
+        // Comprobar tamaño del buffer
+        const sizeMB = buffer.length / (1024 * 1024);
+        if (sizeMB > 300) {
+          await sock.sendMessage(msg.key.remoteJid, {
+            text: `❌ Un video pesa ${sizeMB.toFixed(2)}MB y excede el límite de 300MB.`
+          }, { quoted: msg });
+          continue; // Saltar este item y continuar con el siguiente
+        }
 
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          image: { url: data.profilePic },
-          caption: caption
-        },
-        { quoted: msg }
-      );
-      await sock.sendMessage(msg.key.remoteJid, { text: "✅ Perfil encontrado." }, { edit: waitingMsg.key });
+        // Enviar el contenido (puede ser video o imagen)
+        if (item.url.includes('.mp4')) {
+             await sock.sendMessage(msg.key.remoteJid, {
+                video: buffer,
+                mimetype: "video/mp4",
+                caption
+            }, { quoted: msg });
+        } else {
+             await sock.sendMessage(msg.key.remoteJid, {
+                image: buffer,
+                mimetype: "image/jpeg",
+                caption
+            }, { quoted: msg });
+        }
+      }
 
-    } catch (error) {
-      console.error("Error en el comando ig:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error al buscar el perfil. ${error.message}` }, { quoted: msg });
+      await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
+
+    } catch (err) {
+      console.error("❌ Error en comando Instagram:", err);
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: "❌ *Ocurrió un error al procesar el enlace de Instagram.*"
+      }, { quoted: msg, edit: waitingMsg.key });
     }
   }
 };
 
-export default igCommand;
+export default instagramCommand;
