@@ -26,7 +26,7 @@ const menuCommand = {
   name: "menu",
   category: "general",
   description: "Muestra el menú de comandos del bot.",
-  aliases: ["help", "ayuda", "a"],
+  aliases: ["help", "menu","menú"],
 
   async execute({ sock, msg, commands, config }) {
     const categories = {};
