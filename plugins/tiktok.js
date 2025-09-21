@@ -15,7 +15,7 @@ const tiktokCommand = {
       return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de TikTok." }, { quoted: msg });
     }
 
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video de TikTok...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Dancin' to the video...` }, { quoted: msg });
 
     try {
       const apiUrl = `${config.api.adonix.baseURL}/download/tiktok?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;

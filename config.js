@@ -5,10 +5,10 @@
 
 const config = {
   // El nombre que mostrará el bot en los menús y mensajes.
-  botName: "𝕐𝕆 𝕊𝕆𝕐 𝕐𝕆",
+  botName: "Gawr Gura",
 
   // El nombre del propietario del bot.
-  ownerName: "𝕐𝕆 𝕊𝕆𝕐 𝕐𝕆",
+  ownerName: "Chumbies",
 
   // Tasa de impuestos para la economía (ej. 0.10 para 10%)
   taxRate: 0.19,
