@@ -15,7 +15,7 @@ const facebookCommand = {
       return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de Facebook." }, { quoted: msg });
     }
 
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video de Facebook...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🔱 Swimming for your video... 🌊` }, { quoted: msg });
 
     try {
       const apiUrl = `${config.api.adonix.baseURL}/download/facebook?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;

@@ -17,7 +17,7 @@ const instagramCommand = {
       }, { quoted: msg });
     }
 
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: "⏳ Procesando..." }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: "🦈 Hunting for content..." }, { quoted: msg });
 
     try {
       const apiUrl = `https://api.dorratz.com/igdl?url=${encodeURIComponent(text)}`;
