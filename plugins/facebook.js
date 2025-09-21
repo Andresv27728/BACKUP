@@ -9,7 +9,7 @@ const facebookCommand = {
 
   async execute({ sock, msg, args }) {
     const url = args[0];
-    const fbRegex = /https?:\/\/(www\.)?(facebook\.com|fb\.watch)\/[^\s]+/i;
+    const fbRegex = /https?:\/\/(www\.|web\.)?(facebook\.com|fb\.watch)\/[^\s]+/i;
 
     if (!url || !fbRegex.test(url)) {
       return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de Facebook." }, { quoted: msg });
