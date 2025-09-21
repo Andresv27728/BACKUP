@@ -21,18 +21,21 @@ const playCommand = {
       }
 
       const videoInfo = searchResults.videos[0];
-      const { title, url } = videoInfo;
+      const originalTitle = videoInfo.title;
+      const url = videoInfo.url;
 
-      const apiUrl = `${config.api.adonix.baseURL}/download/yt?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}&format=audio`;
+      const apiUrl = `${config.api.adonix.baseURL}/download/ytmp3?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
 
       const response = await axios.get(apiUrl);
       const result = response.data;
 
-      if (!result.status || result.status !== 'true' || !result.data || !result.data.url) {
+      if (!result.status || !result.data || !result.data.url) {
         throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
       }
 
       const downloadUrl = result.data.url;
+      const title = result.data.title || originalTitle;
+
       const audioBuffer = (await axios.get(downloadUrl, { responseType: 'arraybuffer' })).data;
 
       if (!audioBuffer || audioBuffer.length === 0) {
@@ -40,8 +43,8 @@ const playCommand = {
       }
 
       // Enviar como audio reproducible y luego el título
+      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${title}*` }, { quoted: msg });
       await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
-      await sock.sendMessage(msg.key.remoteJid, { text: title }, { quoted: msg });
 
       // Enviar como documento
       await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: msg });
