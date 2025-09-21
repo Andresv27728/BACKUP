@@ -48,7 +48,11 @@ const facebookCommand = {
       );
 
       // Eliminar el mensaje de "Procesando..."
-      await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
+      try {
+        await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
+      } catch (deleteError) {
+        console.error("Error al eliminar el mensaje de espera:", deleteError);
+      }
 
     } catch (error) {
       console.error("Error en el comando facebook:", error.message);
