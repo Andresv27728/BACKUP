@@ -43,6 +43,7 @@ const play2Command = {
                 caption: caption
             }, { quoted: msg });
 
+            await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
             await logDownload(sock, msg, sentMsg, infoText);
 
         } catch (error) {
