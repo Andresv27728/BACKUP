@@ -1,22 +1,12 @@
-import fetch from 'node-fetch';
+import yts from 'yt-search';
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import ffmpeg from 'fluent-ffmpeg';
-import { promisify } from 'util';
-import { pipeline } from 'stream';
-import { fileURLToPath } from 'url';
 import config from '../config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const streamPipe = promisify(pipeline);
+import { fetchWithRetry } from '../lib/apiHelper.js';
 
 const playCommand = {
   name: "play",
   category: "descargas",
   description: "Busca y descarga una canción en formato de audio (MP3).",
-  aliases: ["playaudio"],
 
   async execute({ sock, msg, args }) {
     if (args.length === 0) {
@@ -24,72 +14,46 @@ const playCommand = {
     }
 
     const query = args.join(' ');
-    await sock.sendMessage(msg.key.remoteJid, { text: `Buscando "${query}"...` }, { quoted: msg });
 
     try {
-      // --- PASO 1: Buscar el video ---
-      const searchApi = `https://delirius-apiofc.vercel.app/search/ytsearch?q=${encodeURIComponent(query)}`;
-      const searchResponse = await fetch(searchApi);
-      const searchData = await searchResponse.json();
-
-      if (!searchData?.data || searchData.data.length === 0) {
-        throw new Error(`No se encontraron resultados de video para "${query}".`);
+      const searchResults = await yts(query);
+      if (!searchResults.videos.length) {
+        throw new Error("No se encontraron resultados.");
       }
 
-      const video = searchData.data[0];
-      const videoTitle = video.title;
-      const videoUrl = video.url; // URL del video de YouTube
+      const videoInfo = searchResults.videos[0];
+      const originalTitle = videoInfo.title;
+      const url = videoInfo.url;
 
-      // --- PASO 2: Descargar y convertir el audio ---
-      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando y convirtiendo: *${videoTitle}*` }, { quoted: msg });
+      const apiUrl = `${config.api.adonix.baseURL}/download/ytmp3?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
 
-      const api = `https://api.neoxr.eu/api/youtube?url=${encodeURIComponent(videoUrl)}&type=audio&quality=128kbps&apikey=russellxz`;
-      const res = await axios.get(api);
-      if (!res.data?.status || !res.data.data?.url) {
-        throw new Error("No se pudo obtener la URL del stream de audio desde la API de descarga.");
+      const response = await fetchWithRetry(apiUrl);
+      const result = response.data;
+
+      if (!result.status || !result.data || !result.data.url) {
+        throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
       }
 
-      const tmpDir = path.join(__dirname, '../tmp');
-      if (!fs.existsSync(tmpDir)) {
-        fs.mkdirSync(tmpDir, { recursive: true });
-      }
+      const downloadUrl = result.data.url;
+      const title = result.data.title || originalTitle;
 
-      const inFile = path.join(tmpDir, `${Date.now()}_in.m4a`);
-      const outFile = path.join(tmpDir, `${Date.now()}_out.mp3`);
-
-      const download = await axios.get(res.data.data.url, { responseType: "stream" });
-      await streamPipe(download.data, fs.createWriteStream(inFile));
-
-      await new Promise((resolve, reject) => {
-        ffmpeg(inFile)
-          .audioCodec("libmp3lame")
-          .audioBitrate("128k")
-          .format("mp3")
-          .save(outFile)
-          .on("end", resolve)
-          .on("error", reject);
-      });
-
-      const audioBuffer = fs.readFileSync(outFile);
-
-      // Limpieza de archivos temporales
-      fs.unlinkSync(inFile);
-      fs.unlinkSync(outFile);
+      const audioResponse = await fetchWithRetry(downloadUrl, { responseType: 'arraybuffer' });
+      const audioBuffer = audioResponse.data;
 
       if (!audioBuffer || audioBuffer.length === 0) {
-        throw new Error("La conversión a MP3 falló o el archivo resultante está vacío.");
+        throw new Error("No se pudo obtener el audio de la API.");
       }
 
-      // --- PASO 3: Enviar los mensajes ---
-      // Enviar como audio reproducible
+      // Enviar como audio reproducible y luego el título
+      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${title}*` }, { quoted: msg });
       await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
 
       // Enviar como documento
-      await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${videoTitle}.mp3` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: msg });
 
     } catch (error) {
       console.error("Error en el comando play:", error);
-      const errorMessage = `❌ No se pudo descargar la canción. Detalle: ${error.message}`;
+      const errorMessage = "❌ No se pudo descargar la canción. El servicio puede no estar disponible. Por favor, inténtalo de nuevo más tarde.";
       await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
     }
   }

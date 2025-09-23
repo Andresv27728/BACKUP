@@ -1,59 +1,54 @@
 import yts from 'yt-search';
 import axios from 'axios';
-import config from '../config.js';
-import { fetchWithRetry } from '../lib/apiHelper.js';
+import { ytdl } from '../lib/functions.js';
 
 const play2Command = {
-  name: "play2",
-  category: "descargas",
-  description: "Busca y descarga un video en formato MP4.",
+    name: 'play2',
+    category: 'downloader',
+    description: 'Busca y descarga un video de YouTube.',
+    aliases: ['playvideo'],
 
-  async execute({ sock, msg, args }) {
-    if (args.length === 0) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de un video." }, { quoted: msg });
+    async execute({ sock, msg, args }) {
+        const query = args.join(' ');
+        if (!query) {
+            return await sock.sendMessage(msg.key.remoteJid, { text: 'Por favor, proporciona el nombre de un video.' }, { quoted: msg });
+        }
+
+        try {
+            await sock.sendMessage(msg.key.remoteJid, { text: `Buscando "${query}"...` }, { quoted: msg });
+
+            const searchResults = await yts(query);
+            const video = searchResults.videos[0];
+
+            if (!video) {
+                return await sock.sendMessage(msg.key.remoteJid, { text: 'No se encontraron resultados.' }, { quoted: msg });
+            }
+
+            const caption = `*Título:* ${video.title}\n*Duración:* ${video.timestamp}\n*Autor:* ${video.author.name}`;
+
+            await sock.sendMessage(msg.key.remoteJid, {
+                image: { url: video.thumbnail },
+                caption: caption + '\n\nDescargando video, por favor espera...'
+            }, { quoted: msg });
+
+            // Use the ytdl helper to get the video link
+            const result = await ytdl(video.url, 'mp4');
+
+            // Download the video buffer from the link
+            const videoResponse = await axios.get(result.url, { responseType: 'arraybuffer' });
+            const videoBuffer = videoResponse.data;
+
+            await sock.sendMessage(msg.key.remoteJid, {
+                video: Buffer.from(videoBuffer, 'binary'),
+                mimetype: 'video/mp4',
+                caption: caption
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('Error en el comando play2:', error);
+            await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al descargar el video: ${error.message}` }, { quoted: msg });
+        }
     }
-
-    const query = args.join(' ');
-
-    try {
-      const searchResults = await yts(query);
-      if (!searchResults.videos.length) {
-        throw new Error("No se encontraron resultados.");
-      }
-
-      const videoInfo = searchResults.videos[0];
-      const originalTitle = videoInfo.title;
-      const url = videoInfo.url;
-
-      const apiUrl = `${config.api.adonix.baseURL}/download/ytmp4?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
-
-      const response = await fetchWithRetry(apiUrl);
-      const result = response.data;
-
-      if (!result.status || !result.data || !result.data.url) {
-        throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
-      }
-
-      const downloadUrl = result.data.url;
-      const title = result.data.title || originalTitle;
-
-      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${title}*` }, { quoted: msg });
-
-      const videoResponse = await fetchWithRetry(downloadUrl, { responseType: 'arraybuffer' });
-      const videoBuffer = videoResponse.data;
-
-      if (!videoBuffer) {
-        throw new Error("El buffer de video está vacío.");
-      }
-
-      await sock.sendMessage(msg.key.remoteJid, { video: videoBuffer, mimetype: 'video/mp4', caption: title }, { quoted: msg });
-
-    } catch (error) {
-      console.error("Error final en play2:", error);
-      const errorMessage = "❌ No se pudo descargar el video. El servicio puede no estar disponible. Por favor, inténtalo de nuevo más tarde.";
-      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
-    }
-  }
 };
 
 export default play2Command;

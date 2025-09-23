@@ -16,7 +16,6 @@ const facebookCommand = {
     }
 
     const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🔱 Swimming for your video... 🌊` }, { quoted: msg });
-    let videoSent = false;
 
     try {
       const apiUrl = `${config.api.adonix.baseURL}/download/facebook?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
@@ -47,7 +46,6 @@ const facebookCommand = {
         },
         { quoted: msg }
       );
-      videoSent = true;
 
       // Eliminar el mensaje de "Procesando..."
       try {
@@ -58,10 +56,8 @@ const facebookCommand = {
 
     } catch (error) {
       console.error("Error en el comando facebook:", error.message);
-      if (!videoSent) {
-        const errorMessage = "❌ No se pudo descargar el video de Facebook. El servicio puede no estar disponible o el enlace ser inválido. Por favor, inténtalo de nuevo más tarde.";
-        await sock.sendMessage(msg.key.remoteJid, { text: errorMessage, edit: waitingMsg.key });
-      }
+      const errorMessage = "❌ No se pudo descargar el video de Facebook. El servicio puede no estar disponible o el enlace ser inválido. Por favor, inténtalo de nuevo más tarde.";
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage, edit: waitingMsg.key });
     }
   }
 };
