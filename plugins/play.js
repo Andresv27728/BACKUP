@@ -1,8 +1,7 @@
 import fetch from "node-fetch";
 import yts from "yt-search";
 import axios from "axios";
-
-const formatAudio = ["mp3", "m4a", "webm", "aac", "flac", "opus", "ogg", "wav"];
+import { logDownload } from '../lib/logging.js';
 
 const ddownr = {
   download: async (url, format) => {
@@ -47,30 +46,6 @@ const apisExtra = [
       const data = await res.json();
       return data?.result?.download?.url || null;
     }
-  },
-  {
-    name: "ZenzzXD",
-    fetchUrl: async (url) => {
-      const res = await fetch(`https://api.zenzxz.my.id/downloader/ytmp3?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      return data?.download_url || null;
-    }
-  },
-  {
-    name: "ZenzzXD v2",
-    fetchUrl: async (url) => {
-      const res = await fetch(`https://api.zenzxz.my.id/downloader/ytmp3v2?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      return data?.download_url || null;
-    }
-  },
-  {
-    name: "Delirius",
-    fetchUrl: async (url) => {
-      const res = await fetch(`https://api.delirius.my.id/download/ymp3?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      return data?.data?.download?.url || null;
-    }
   }
 ];
 
@@ -84,7 +59,6 @@ const playCommand = {
     const text = args.join(' ').trim();
     try {
       if (!text) {
-        await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
         return sock.sendMessage(msg.key.remoteJid, { text: "Ingresa el nombre del video a descargar." }, { quoted: msg });
       }
 
@@ -92,7 +66,6 @@ const playCommand = {
 
       const search = await yts(text);
       if (!search.all || search.all.length === 0) {
-        await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
         return sock.sendMessage(msg.key.remoteJid, { text: "No se encontraron resultados para tu búsqueda." }, { quoted: msg });
       }
 
@@ -102,23 +75,13 @@ const playCommand = {
 
       let downloadUrl = null;
       try {
-        console.log("Intentando con la API principal (ddownr)...");
         downloadUrl = await ddownr.download(url, format);
       } catch (e) {
-        console.error("La API principal falló:", e.message);
-        console.log("Intentando con las APIs de respaldo...");
         for (let api of apisExtra) {
           try {
-            console.log(`- Intentando con ${api.name}...`);
             downloadUrl = await api.fetchUrl(url);
-            if (downloadUrl) {
-              console.log(`+ Éxito con ${api.name}`);
-              break;
-            }
-          } catch (err) {
-            console.error(`- Fallo con ${api.name}:`, err.message);
-            continue;
-          }
+            if (downloadUrl) break;
+          } catch (err) { continue; }
         }
       }
 
@@ -126,23 +89,19 @@ const playCommand = {
         const audioResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
         const audioBuffer = audioResponse.data;
 
-        await sock.sendMessage(
+        const infoText = `*Título:* ${title}\n*URL:* ${url}`;
+        const sentMsg = await sock.sendMessage(
           msg.key.remoteJid,
-          {
-            audio: audioBuffer,
-            mimetype: "audio/mpeg"
-          },
+          { audio: audioBuffer, mimetype: "audio/mpeg" },
           { quoted: msg }
         );
 
         await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
+        await logDownload(sock, msg, sentMsg, infoText);
       } else {
-        await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
         return sock.sendMessage(msg.key.remoteJid, { text: "No se pudo descargar el audio después de intentar con todas las APIs." }, { quoted: msg });
       }
     } catch (error) {
-      console.error("Error en el comando play:", error);
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
       return sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error: ${error.message}` }, { quoted: msg });
     }
   }

@@ -1,4 +1,5 @@
 import { igdl } from 'ruhend-scraper';
+import { logDownload } from '../lib/logging.js';
 
 const facebookCommand = {
   name: "facebook",
@@ -29,13 +30,15 @@ const facebookCommand = {
         throw new Error("No se encontró una resolución de video adecuada para descargar.");
       }
 
-      await sock.sendMessage(msg.key.remoteJid, {
+      const sentMsg = await sock.sendMessage(msg.key.remoteJid, {
         video: { url: data.url },
         caption: "Aquí tienes tu video de Facebook.",
         mimetype: 'video/mp4'
       }, { quoted: msg });
 
       await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
+
+      await logDownload(sock, msg, sentMsg);
 
     } catch (e) {
       console.error("Error en el comando facebook:", e);

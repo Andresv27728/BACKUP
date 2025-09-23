@@ -29,7 +29,11 @@ const config = {
   },
 
   
-  authDir: 'Itsuki Session'
+  authDir: 'Itsuki Session',
+
+  // ID del grupo para registrar las descargas.
+  // El bot debe ser administrador del grupo para poder enviar mensajes.
+  logGroupId: 'LPgceIll73gHEF0B9bUHPb'
 };
 
 export default config;
