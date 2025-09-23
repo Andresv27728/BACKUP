@@ -26,9 +26,11 @@ const playCommand = {
       const url = videoInfo.url;
 
       const apiUrl = `${config.api.adonix.baseURL}/download/ytmp3?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
+      console.log(`[play] Calling API: ${apiUrl}`);
 
       const response = await fetchWithRetry(apiUrl);
       const result = response.data;
+      console.log('[play] API Response:', JSON.stringify(result, null, 2));
 
       if (!result.status || !result.data || !result.data.url) {
         throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
