@@ -1,93 +1,67 @@
 import fetch from 'node-fetch';
+import config from '../config.js';
 
 const playCommand = {
   name: "play",
   category: "descargas",
-  description: "Busca y descarga una canción de YouTube.",
+  description: "Busca y descarga una canción en formato de audio (MP3).",
   aliases: ["playaudio"],
 
   async execute({ sock, msg, args }) {
-    const text = args.join(' ');
-    if (!text) {
-      return sock.sendMessage(msg.key.remoteJid, { text: `🌟 Ingresa un nombre para buscar en YouTube.\n\n✨ *Ejemplo:* .play Shakira` }, { quoted: msg });
+    if (args.length === 0) {
+      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de una canción." }, { quoted: msg });
     }
 
-    try {
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "🕛", key: msg.key } });
+    const query = args.join(' ');
+    await sock.sendMessage(msg.key.remoteJid, { text: `Buscando "${query}"...` }, { quoted: msg });
 
-      // --- PRIMER PASO: BUSCAR VIDEO ---
-      const searchApi = `https://delirius-apiofc.vercel.app/search/ytsearch?q=${encodeURIComponent(text)}`;
+    try {
+      // --- PASO 1: Buscar el video ---
+      const searchApi = `https://delirius-apiofc.vercel.app/search/ytsearch?q=${encodeURIComponent(query)}`;
       const searchResponse = await fetch(searchApi);
       const searchData = await searchResponse.json();
 
       if (!searchData?.data || searchData.data.length === 0) {
-        await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
-        return sock.sendMessage(msg.key.remoteJid, { text: `⚠️ No encontré resultados de video en YouTube para *"${text}"*...` }, { quoted: msg });
+        throw new Error(`No se encontraron resultados de video para "${query}".`);
       }
 
-      const video = searchData.data[0]; // Primer resultado
+      const video = searchData.data[0];
+      const videoTitle = video.title;
 
-      // Nuevo waitMessage estilizado
-      const waitMessage = `*┏━━━━━━༺❀༻━━━━━━┓*
-*┃* ✨ *Nombre:* ${video.title}
-*┃* 🧚‍♀️ *Artista:* ${video.author.name}
-*┃* ⌛ *Duración:* ${video.duration}
-*┃* 👁 *Vistas:* ${video.views}
-*┗━━━━━━༺❀༻━━━━━━┛*
-
-> ☁️ *Estamos preparando tu audio, espera tantito...*`;
-
-      // Enviamos miniatura con mensaje
-      await sock.sendMessage(msg.key.remoteJid, {
-        image: { url: video.image },
-        caption: waitMessage.trim(),
-        contextInfo: {
-          forwardingScore: 999,
-          isForwarded: true,
-          externalAdReply: {
-            title: "☕︎︎ 𝘔𝘢𝘪 • 𝑊𝑜𝑟𝑙𝑑 𝑂𝑓 𝐶𝑢𝑡𝑒 🍁",
-            body: "✐ 𝖯𝗈𝗐𝖾𝗋𝖾𝖽 𝖡𝗒 𝖶𝗂𝗋𝗄 🌵",
-            thumbnailUrl: video.image,
-            mediaUrl: "https://chat.whatsapp.com/KqkJwla1aq1LgaPiuFFtEY",
-            mediaType: 2,
-            showAdAttribution: true,
-            renderLargerThumbnail: true
-          }
-        }
-      }, { quoted: msg });
-
-      // --- SEGUNDO PASO: DESCARGAR AUDIO ---
-      const downloadApi = `https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(video.title)}`;
+      // --- PASO 2: Descargar el audio usando el título ---
+      const downloadApi = `https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(videoTitle)}`;
       const downloadResponse = await fetch(downloadApi);
       const downloadData = await downloadResponse.json();
 
       if (!downloadData?.result?.download?.url) {
-        await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
         if (downloadData?.result?.msg) {
-          return sock.sendMessage(msg.key.remoteJid, { text: `❌ No se pudo obtener el audio del video usando el título. Error de la API: ${downloadData.result.msg}` }, { quoted: msg });
+          throw new Error(`No se pudo obtener el audio. API dice: ${downloadData.result.msg}`);
         }
-        return sock.sendMessage(msg.key.remoteJid, { text: "❌ No se pudo obtener el audio del video." }, { quoted: msg });
+        throw new Error("No se pudo obtener la URL de descarga del audio.");
       }
 
       const audioUrl = downloadData.result.download.url;
 
-      await sock.sendMessage(msg.key.remoteJid, {
-        audio: { url: audioUrl },
-        mimetype: 'audio/mpeg',
-        ptt: false,
-        fileName: `🎵 ${video.title}.mp3`,
-        contextInfo: {
-          forwardingScore: 9,
-          isForwarded: true
-        }
-      }, { quoted: msg });
+      const audioRes = await fetch(audioUrl);
+      const audioBuffer = await audioRes.arrayBuffer();
 
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error("No se pudo obtener el audio de la URL de descarga.");
+      }
+
+      // --- PASO 3: Enviar los mensajes ---
+      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${videoTitle}*` }, { quoted: msg });
+
+      // Enviar como audio reproducible
+      await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
+
+      // Enviar como documento
+      await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${videoTitle}.mp3` }, { quoted: msg });
 
     } catch (error) {
-      console.error(error);
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "❌", key: msg.key } });
-      await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error al procesar tu solicitud:\n${error.message}` }, { quoted: msg });
+      console.error("Error en el comando play:", error);
+      const errorMessage = `❌ No se pudo descargar la canción. Detalle: ${error.message}`;
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
     }
   }
 };
