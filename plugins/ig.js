@@ -1,4 +1,5 @@
 import { igdl } from "ruhend-scraper";
+import { logDownload } from '../lib/logging.js';
 
 const instagramCommand = {
   name: "instagram",
@@ -33,22 +34,24 @@ const instagramCommand = {
         throw new Error('No se pudo encontrar un video o imagen con resolución adecuada.');
       }
 
-      // Determinar si es video o imagen basado en la extensión o el tipo (si estuviera disponible)
       const isVideo = media.url.includes('.mp4') || media.type === 'video';
+      let sentMsg;
 
       if (isVideo) {
-        await sock.sendMessage(msg.key.remoteJid, {
+        sentMsg = await sock.sendMessage(msg.key.remoteJid, {
           video: { url: media.url },
           caption: 'Aquí está tu video de Instagram.'
         }, { quoted: msg });
       } else {
-        await sock.sendMessage(msg.key.remoteJid, {
+        sentMsg = await sock.sendMessage(msg.key.remoteJid, {
           image: { url: media.url },
           caption: 'Aquí está tu imagen de Instagram.'
         }, { quoted: msg });
       }
 
       await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
+
+      await logDownload(sock, msg, sentMsg);
 
     } catch (err) {
       console.error("Error en el comando instagram:", err);

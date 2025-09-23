@@ -1,4 +1,5 @@
 import fg from 'api-dylux';
+import { logDownload } from '../lib/logging.js';
 
 const tiktokCommand = {
   name: "tiktok",
@@ -25,12 +26,14 @@ const tiktokCommand = {
 
       let caption = `*Descarga de TikTok*\n\n*Título:* ${title}\n*Autor:* @${nickname}\n*Duración:* ${duration}`.trim();
 
-      await sock.sendMessage(msg.key.remoteJid, {
+      const sentMsg = await sock.sendMessage(msg.key.remoteJid, {
         video: { url: play },
         caption
       }, { quoted: msg });
 
       await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
+
+      await logDownload(sock, msg, sentMsg);
 
     } catch (e) {
       console.error("Error en el comando tiktok:", e);
