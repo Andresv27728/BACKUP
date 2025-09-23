@@ -1,5 +1,16 @@
 import fetch from 'node-fetch';
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import ffmpeg from 'fluent-ffmpeg';
+import { promisify } from 'util';
+import { pipeline } from 'stream';
+import { fileURLToPath } from 'url';
 import config from '../config.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const streamPipe = promisify(pipeline);
 
 const playCommand = {
   name: "play",
@@ -27,31 +38,49 @@ const playCommand = {
 
       const video = searchData.data[0];
       const videoTitle = video.title;
+      const videoUrl = video.url; // URL del video de YouTube
 
-      // --- PASO 2: Descargar el audio usando el título ---
-      const downloadApi = `https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(videoTitle)}`;
-      const downloadResponse = await fetch(downloadApi);
-      const downloadData = await downloadResponse.json();
+      // --- PASO 2: Descargar y convertir el audio ---
+      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando y convirtiendo: *${videoTitle}*` }, { quoted: msg });
 
-      if (!downloadData?.result?.download?.url) {
-        if (downloadData?.result?.msg) {
-          throw new Error(`No se pudo obtener el audio. API dice: ${downloadData.result.msg}`);
-        }
-        throw new Error("No se pudo obtener la URL de descarga del audio.");
+      const api = `https://api.neoxr.eu/api/youtube?url=${encodeURIComponent(videoUrl)}&type=audio&quality=128kbps&apikey=russellxz`;
+      const res = await axios.get(api);
+      if (!res.data?.status || !res.data.data?.url) {
+        throw new Error("No se pudo obtener la URL del stream de audio desde la API de descarga.");
       }
 
-      const audioUrl = downloadData.result.download.url;
+      const tmpDir = path.join(__dirname, '../tmp');
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
 
-      const audioRes = await fetch(audioUrl);
-      const audioBuffer = await audioRes.arrayBuffer();
+      const inFile = path.join(tmpDir, `${Date.now()}_in.m4a`);
+      const outFile = path.join(tmpDir, `${Date.now()}_out.mp3`);
+
+      const download = await axios.get(res.data.data.url, { responseType: "stream" });
+      await streamPipe(download.data, fs.createWriteStream(inFile));
+
+      await new Promise((resolve, reject) => {
+        ffmpeg(inFile)
+          .audioCodec("libmp3lame")
+          .audioBitrate("128k")
+          .format("mp3")
+          .save(outFile)
+          .on("end", resolve)
+          .on("error", reject);
+      });
+
+      const audioBuffer = fs.readFileSync(outFile);
+
+      // Limpieza de archivos temporales
+      fs.unlinkSync(inFile);
+      fs.unlinkSync(outFile);
 
       if (!audioBuffer || audioBuffer.length === 0) {
-        throw new Error("No se pudo obtener el audio de la URL de descarga.");
+        throw new Error("La conversión a MP3 falló o el archivo resultante está vacío.");
       }
 
       // --- PASO 3: Enviar los mensajes ---
-      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${videoTitle}*` }, { quoted: msg });
-
       // Enviar como audio reproducible
       await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
 
