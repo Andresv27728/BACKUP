@@ -77,8 +77,8 @@ const apisExtra = [
 const playCommand = {
   name: "play",
   category: "descargas",
-  description: "Busca y descarga una canción y la envía como documento.",
-  aliases: ["ytmp3doc"],
+  description: "Busca y descarga una canción y la envía como audio.",
+  aliases: ["ytmp3"],
 
   async execute({ sock, msg, args }) {
     const text = args.join(' ').trim();
@@ -123,13 +123,14 @@ const playCommand = {
       }
 
       if (downloadUrl) {
-        const fileName = `${title.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/ +/g, "_")}.${format}`;
+        const audioResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+        const audioBuffer = audioResponse.data;
+
         await sock.sendMessage(
           msg.key.remoteJid,
           {
-            document: { url: downloadUrl },
-            mimetype: "audio/mpeg",
-            fileName: fileName
+            audio: audioBuffer,
+            mimetype: "audio/mpeg"
           },
           { quoted: msg }
         );
