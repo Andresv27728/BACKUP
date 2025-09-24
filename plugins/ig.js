@@ -1,62 +1,78 @@
-import { igdl } from "ruhend-scraper";
-import { logDownload } from '../lib/logging.js';
+import axios from 'axios';
+import config from '../config.js'; // Asumiendo que el prefijo podría estar en config
 
 const instagramCommand = {
   name: "instagram",
-  category: "downloader",
-  description: "Descarga un video o historia de Instagram desde un enlace.",
   aliases: ["ig"],
+  category: "descargas",
+  description: "Descarga contenido de Instagram desde un enlace.",
 
   async execute({ sock, msg, args }) {
-    const url = args[0];
-    if (!url) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace de Instagram para descargar el video o la historia." }, { quoted: msg });
+    const text = args.join(" ");
+    const pref = config.prefix || "."; // Usar prefijo de config o '.' por defecto
+
+    if (!text) {
+      return sock.sendMessage(msg.key.remoteJid, {
+        text: `✳️ *Usa:*\n${pref}${this.name} <enlace>\nEj: *${pref}${this.name}* https://www.instagram.com/p/CCoI4DQBGVQ/`
+      }, { quoted: msg });
     }
 
-    try {
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "🕒", key: msg.key } });
-      await sock.sendMessage(msg.key.remoteJid, { text: "Descargando contenido de Instagram..." }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: "🦈 Hunting for content..." }, { quoted: msg });
 
-      const res = await igdl(url);
-      const data = res.data;
+    try {
+      const apiUrl = `https://api.dorratz.com/igdl?url=${encodeURIComponent(text)}`;
+      const response = await axios.get(apiUrl);
+      const { data } = response.data;
 
       if (!data || data.length === 0) {
-        throw new Error('No se encontraron medios en el enlace proporcionado.');
+        return sock.sendMessage(msg.key.remoteJid, {
+          text: "❌ *No se pudo obtener el contenido de Instagram.*"
+        }, { quoted: msg, edit: waitingMsg.key });
       }
 
-      const media = data.sort((a, b) => {
-        const resA = parseInt(a.resolution) || 0;
-        const resB = parseInt(b.resolution) || 0;
-        return resB - resA;
-      })[0];
+      const caption = `🎬 *Contenido IG descargado*\n𖠁 *API:* api.dorratz.com`;
 
-      if (!media || !media.url) {
-        throw new Error('No se pudo encontrar un video o imagen con resolución adecuada.');
+      for (const item of data) {
+        // Descargar el buffer directamente
+        const videoRes = await axios.get(item.url, { responseType: "arraybuffer" });
+        const buffer = videoRes.data;
+
+        // Comprobar tamaño del buffer
+        const sizeMB = buffer.length / (1024 * 1024);
+        if (sizeMB > 300) {
+          await sock.sendMessage(msg.key.remoteJid, {
+            text: `❌ Un video pesa ${sizeMB.toFixed(2)}MB y excede el límite de 300MB.`
+          }, { quoted: msg });
+          continue; // Saltar este item y continuar con el siguiente
+        }
+
+        // Enviar el contenido (puede ser video o imagen)
+        if (item.url.includes('.mp4')) {
+             await sock.sendMessage(msg.key.remoteJid, {
+                video: buffer,
+                mimetype: "video/mp4",
+                caption
+            }, { quoted: msg });
+        } else {
+             await sock.sendMessage(msg.key.remoteJid, {
+                image: buffer,
+                mimetype: "image/jpeg",
+                caption
+            }, { quoted: msg });
+        }
       }
 
-      const isVideo = media.url.includes('.mp4') || media.type === 'video';
-      let sentMsg;
-
-      if (isVideo) {
-        sentMsg = await sock.sendMessage(msg.key.remoteJid, {
-          video: { url: media.url },
-          caption: 'Aquí está tu video de Instagram.'
-        }, { quoted: msg });
-      } else {
-        sentMsg = await sock.sendMessage(msg.key.remoteJid, {
-          image: { url: media.url },
-          caption: 'Aquí está tu imagen de Instagram.'
-        }, { quoted: msg });
+      try {
+        await sock.deleteMessage(msg.key.remoteJid, waitingMsg.key);
+      } catch (deleteError) {
+        console.error("Error al eliminar el mensaje de espera en ig.js:", deleteError);
       }
-
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
-
-      await logDownload(sock, msg, sentMsg);
 
     } catch (err) {
-      console.error("Error en el comando instagram:", err);
-      await sock.sendMessage(msg.key.remoteJid, { react: { text: "⚠️", key: msg.key } });
-      await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al descargar desde Instagram. Por favor, verifica que el enlace sea correcto y que el perfil no sea privado.\n\n*Detalles:* ${err.message}` }, { quoted: msg });
+      console.error("❌ Error en comando Instagram:", err);
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: "❌ *Ocurrió un error al procesar el enlace de Instagram.*"
+      }, { quoted: msg, edit: waitingMsg.key });
     }
   }
 };
