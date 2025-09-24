@@ -1,13 +1,14 @@
 import fetch from "node-fetch";
 import yts from 'yt-search';
+import axios from 'axios';
 
 const youtubeRegexID = /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([a-zA-Z0-9_-]{11})/;
 
 const play2Command = {
   name: "play2",
   category: "descargas",
-  description: "Busca y descarga un video de YouTube y lo envía como documento.",
-  aliases: ["ytmp4doc"],
+  description: "Busca y descarga un video de YouTube y lo envía como video.",
+  aliases: ["ytmp4"],
 
   async execute({ sock, msg, args }) {
     const text = args.join(' ').trim();
@@ -51,11 +52,13 @@ const play2Command = {
           const videoTitle = data.title || title;
 
           if (downloadUrl) {
+            const videoResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+            const videoBuffer = videoResponse.data;
+
             await sock.sendMessage(
               msg.key.remoteJid,
               {
-                document: { url: downloadUrl },
-                fileName: `${videoTitle}.mp4`,
+                video: videoBuffer,
                 mimetype: 'video/mp4',
                 caption: `${videoTitle} | (API: ${fuente.name})`
               },
