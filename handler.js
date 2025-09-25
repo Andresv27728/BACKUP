@@ -14,8 +14,8 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     const msg = m.messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
-  // Pretty print message to console
-  try { await print(msg, sock); } catch {}
+    // Pretty print message to console
+    try { await print(msg, sock); } catch {}
 
     const senderId = msg.key.participant || msg.key.remoteJid;
     msg.sender = senderId; // Adjuntar para fácil acceso
@@ -24,76 +24,71 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     let body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
     msg.body = body; // Adjuntar para fácil acceso en los plugins
 
+    let command = null;
+    let commandName = '';
+    let args = [];
+
     const settings = readSettingsDb();
     const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
+    const globalPrefix = config.prefix || '.'; // Usar '.' como prefijo global por defecto
 
-    let commandName;
-    let args;
+    let isPrefixed = false;
+    let textAfterPrefix = '';
 
-    if (groupPrefix) {
-      if (!body.startsWith(groupPrefix)) {
-        // No hacer nada si no empieza con el prefijo de grupo
-      } else {
-        body = body.slice(groupPrefix.length);
-        args = body.trim().split(/ +/).slice(1);
-        commandName = body.trim().split(/ +/)[0].toLowerCase();
-      }
-    } else {
-      // Si hay prefijo global o si no hay prefijo de grupo, procesar normal
-      const globalPrefix = config.prefix; // Asumiendo que podría haber un prefijo global en config
-      if (globalPrefix && body.startsWith(globalPrefix)) {
-        body = body.slice(globalPrefix.length);
-      }
-      args = body.trim().split(/ +/).slice(1);
-      commandName = body.trim().split(/ +/)[0].toLowerCase();
+    if (groupPrefix && body.startsWith(groupPrefix)) {
+      isPrefixed = true;
+      textAfterPrefix = body.slice(groupPrefix.length);
+    } else if (!groupPrefix && body.startsWith(globalPrefix)) {
+      isPrefixed = true;
+      textAfterPrefix = body.slice(globalPrefix.length);
     }
-    msg.command = commandName; // Adjuntar para fácil acceso
 
-    let command = commands.get(commandName) || commands.get(aliases.get(commandName));
+    // 1. Probar comandos con prefijo
+    if (isPrefixed) {
+      commandName = textAfterPrefix.trim().split(/ +/)[0].toLowerCase();
+      command = commands.get(commandName) || commands.get(aliases.get(commandName));
+      if (command) {
+        args = textAfterPrefix.trim().split(/ +/).slice(1);
+      }
+    }
 
-    // Lógica para comandos sin prefijo (basado en regex)
+    // 2. Si no se encontró un comando con prefijo, probar sin prefijo (regex)
     if (!command) {
       for (const cmd of commands.values()) {
         if (cmd.customPrefix && cmd.customPrefix.test(body)) {
           command = cmd;
-          // Los argumentos para estos comandos suelen ser el texto completo
-          args = body.trim().split(/ +/);
-          commandName = cmd.name; // Asignar para el log de mantenimiento
+          commandName = cmd.name;
+          args = [body]; // El cuerpo completo es el argumento
           break;
         }
       }
     }
 
+    // Asignar el nombre del comando al mensaje para uso interno en plugins
+    msg.command = commandName;
+
+    // 3. Si se encontró un comando (con o sin prefijo), ejecutarlo
     if (command) {
       const senderNumber = senderId.split('@')[0];
       const isOwner = config.ownerNumbers.includes(senderNumber);
 
-      // Lógica de Permisos Corregida
       if (command.category === 'propietario' && !isOwner) {
         return sock.sendMessage(from, { text: "Este comando es solo para el propietario del bot." });
       }
-      if (command.category === 'subbots' && !isOwner) {
-        // En un futuro, aquí se podría comprobar una lista de usuarios autorizados
-        return sock.sendMessage(from, { text: "No tienes permiso para gestionar sub-bots." });
-      }
-      // Los sub-bots no pueden usar comandos de propietario/sub-bots
       if (isSubBot && (command.category === 'propietario' || command.category === 'subbots')) {
         return sock.sendMessage(from, { text: "Un sub-bot no puede usar este comando." });
       }
 
-      // Cooldown
       if (cooldowns.has(senderId)) {
         const timeDiff = (Date.now() - cooldowns.get(senderId)) / 1000;
         if (timeDiff < COOLDOWN_SECONDS) return;
       }
 
-      // Verificación de Mantenimiento
       const maintenanceList = readMaintenanceDb();
       if (maintenanceList.includes(commandName) && !isOwner) {
-        return sock.sendMessage(from, { text: "🛠️ Este comando está actualmente en mantenimiento. Por favor, inténtalo más tarde." });
+        return sock.sendMessage(from, { text: "🛠️ Este comando está actualmente en mantenimiento." });
       }
 
-      // Ejecución
       try {
         await new Promise(resolve => setTimeout(resolve, RESPONSE_DELAY_MS));
         await command.execute({ sock, msg, args, commands, config, testCache, isOwner });

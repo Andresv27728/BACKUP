@@ -1,99 +1,60 @@
 import yts from 'yt-search';
-import fetch from 'node-fetch';
-import config from '../config.js'; // Assuming config is not in .cjs
-
-// Helper to send reactions
-async function doReact(emoji, msg, sock) {
-  try {
-    await sock.sendMessage(msg.key.remoteJid, {
-      react: { text: emoji, key: msg.key },
-    });
-  } catch (e) {
-    console.error("Reaction error:", e);
-  }
-}
+import axios from 'axios';
+import config from '../config.js';
+import { fetchWithRetry } from '../lib/apiHelper.js';
 
 const playCommand = {
   name: "play",
   category: "descargas",
-  description: "Busca y descarga una canción de YouTube.",
-  aliases: ["ytsong", "song", "music"],
+  description: "Busca y descarga una canción en formato de audio (MP3).",
 
   async execute({ sock, msg, args }) {
-    await doReact("🎵", msg, sock);
+    if (args.length === 0) {
+      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de una canción." }, { quoted: msg });
+    }
+
+    const query = args.join(' ');
+
     try {
-      const query = args.join(' ');
-      if (!query) {
-        const replyText = "✨ *GAWR GURA's Music Player* 🎧\n\n" +
-          "Dime el nombre de una canción y la busco por ti~ 🦈💙\n\n" +
-          "📌 Ejemplo:\n" +
-          `• ${config.PREFIX || '.'}play Dandelions\n` +
-          `• ${config.PREFIX || '.'}song Shape of You`;
-        return await sock.sendMessage(msg.key.remoteJid, { text: replyText }, { quoted: msg });
+      const searchResults = await yts(query);
+      if (!searchResults.videos.length) {
+        throw new Error("No se encontraron resultados.");
       }
 
-      await doReact("🔍", msg, sock);
-      const search = await yts(query);
-      const video = search.videos[0];
-      if (!video) {
-        const replyText = `❌ No encontré nada para "${query}" 😢\n\n` +
-          "Intenta con otro nombre de canción, senpai~ 🦈";
-        return await sock.sendMessage(msg.key.remoteJid, { text: replyText }, { quoted: msg });
+      const videoInfo = searchResults.videos[0];
+      const originalTitle = videoInfo.title;
+      const url = videoInfo.url;
+
+      const apiUrl = `${config.api.adonix.baseURL}/download/ytmp3?apikey=${config.api.adonix.apiKey}&url=${encodeURIComponent(url)}`;
+
+      const response = await fetchWithRetry(apiUrl);
+      const result = response.data;
+
+      if (!result.status || !result.data || !result.data.url) {
+        throw new Error("La API no devolvió un enlace de descarga válido o indicó un error.");
       }
 
-      const apiUrl = `https://apis.davidcyriltech.my.id/download/ytmp3?url=${encodeURIComponent(video.url)}`;
-      const apiRes = await fetch(apiUrl);
-      const json = await apiRes.json();
-      if (!json.success || !json.result?.download_url) {
-        throw new Error("No se pudo obtener el link de descarga de la API.");
+      const downloadUrl = result.data.url;
+      const title = result.data.title || originalTitle;
+
+      const audioResponse = await fetchWithRetry(downloadUrl, { responseType: 'arraybuffer' });
+      const audioBuffer = audioResponse.data;
+
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error("No se pudo obtener el audio de la API.");
       }
 
-      const infoMsg =
-        `✨ *GAWR GURA encontró tu canción* 🎶\n\n` +
-        `🎵 *Título:* ${video.title}\n` +
-        `👤 *Artista:* ${video.author.name}\n` +
-        `⏱️ *Duración:* ${video.timestamp}\n` +
-        `👁️ *Vistas:* ${video.views.toLocaleString()}\n\n` +
-        "Preparando el audio... ⏳";
+      // Enviar como audio reproducible y luego el título
+      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando: *${title}*` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mpeg' }, { quoted: msg });
 
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          image: { url: video.thumbnail },
-          caption: infoMsg,
-        },
-        { quoted: msg }
-      );
+      // Enviar como documento
+      await sock.sendMessage(msg.key.remoteJid, { document: audioBuffer, mimetype: 'audio/mpeg', fileName: `${title}.mp3` }, { quoted: msg });
 
-      // Como audio
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          audio: { url: json.result.download_url },
-          mimetype: 'audio/mpeg',
-          fileName: `${video.title.replace(/[^\w\s]/gi, '')}.mp3`,
-        },
-        { quoted: msg }
-      );
-
-      // Como documento
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          document: { url: json.result.download_url },
-          mimetype: 'audio/mpeg',
-          fileName: `${video.title.replace(/[^\w\s]/gi, '')}.mp3`,
-        },
-        { quoted: msg }
-      );
-
-      await doReact("✅", msg, sock);
-    } catch (e) {
-      console.error("Play error:", e);
-      const errorText = "❌ *Oh no!* 🥺\n\n" +
-        `Error: ${e.message || "Fallo en la descarga"}\n\n` +
-        "Intenta con otra canción~ 💙";
-      await sock.sendMessage(msg.key.remoteJid, { text: errorText }, { quoted: msg });
+    } catch (error) {
+      console.error("Error en el comando play:", error);
+      const errorMessage = "❌ No se pudo descargar la canción. El servicio puede no estar disponible. Por favor, inténtalo de nuevo más tarde.";
+      await sock.sendMessage(msg.key.remoteJid, { text: errorMessage }, { quoted: msg });
     }
   }
 };

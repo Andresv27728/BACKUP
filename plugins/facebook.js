@@ -8,15 +8,13 @@ const facebookCommand = {
   customPrefix: /https?:\/\/(www\.)?(facebook\.com|fb\.watch)\//i,
 
   async execute({ sock, msg, args }) {
-    // Determinar la URL si se activa por comando o por regex
-    const isCmd = this.aliases.includes(msg.command) || this.name === msg.command;
-    const url = isCmd ? args[0] : msg.body;
+    // La lógica en handler.js ahora nos da el argumento correcto.
+    // Si es por comando, args[0] es la URL.
+    // Si es por regex, args[0] es el cuerpo completo (la URL).
+    const url = args[0];
 
-    if (!url || !this.customPrefix.test(url)) {
-      if (isCmd) { // Solo enviar mensaje de error si fue un comando explícito
-        return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace de Facebook válido." }, { quoted: msg });
-      }
-      return; // Si no es comando y no es un enlace, no hacer nada
+    if (!url) { // Esta comprobación es principalmente para el caso de comando sin URL
+      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace de Facebook válido." }, { quoted: msg });
     }
 
     try {
@@ -48,7 +46,10 @@ const facebookCommand = {
     } catch (e) {
       console.error("Error en el comando facebook:", e);
       await sock.sendMessage(msg.key.remoteJid, { react: { text: "⚠️", key: msg.key } });
-      await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al descargar el video. Por favor, verifica que el enlace sea correcto y público.\n\n*Detalles:* ${e.message}` }, { quoted: msg });
+      // No enviar mensaje de error si se activó sin prefijo, para no ser spam
+      if (msg.command) {
+        await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al descargar el video.\n\n*Detalles:* ${e.message}` }, { quoted: msg });
+      }
     }
   }
 };
