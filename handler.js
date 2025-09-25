@@ -22,6 +22,7 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
 
     const from = msg.key.remoteJid;
     let body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+    msg.body = body; // Adjuntar para fácil acceso en los plugins
 
     const settings = readSettingsDb();
     const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
@@ -30,21 +31,38 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     let args;
 
     if (groupPrefix) {
-      if (!body.startsWith(groupPrefix)) return;
-      body = body.slice(groupPrefix.length);
-      args = body.trim().split(/ +/).slice(1);
-      commandName = body.trim().split(/ +/)[0].toLowerCase();
+      if (!body.startsWith(groupPrefix)) {
+        // No hacer nada si no empieza con el prefijo de grupo
+      } else {
+        body = body.slice(groupPrefix.length);
+        args = body.trim().split(/ +/).slice(1);
+        commandName = body.trim().split(/ +/)[0].toLowerCase();
+      }
     } else {
       // Si hay prefijo global o si no hay prefijo de grupo, procesar normal
       const globalPrefix = config.prefix; // Asumiendo que podría haber un prefijo global en config
-      if (globalPrefix && !body.startsWith(globalPrefix)) return;
-      if (globalPrefix) body = body.slice(globalPrefix.length);
-
+      if (globalPrefix && body.startsWith(globalPrefix)) {
+        body = body.slice(globalPrefix.length);
+      }
       args = body.trim().split(/ +/).slice(1);
       commandName = body.trim().split(/ +/)[0].toLowerCase();
     }
+    msg.command = commandName; // Adjuntar para fácil acceso
 
     let command = commands.get(commandName) || commands.get(aliases.get(commandName));
+
+    // Lógica para comandos sin prefijo (basado en regex)
+    if (!command) {
+      for (const cmd of commands.values()) {
+        if (cmd.customPrefix && cmd.customPrefix.test(body)) {
+          command = cmd;
+          // Los argumentos para estos comandos suelen ser el texto completo
+          args = body.trim().split(/ +/);
+          commandName = cmd.name; // Asignar para el log de mantenimiento
+          break;
+        }
+      }
+    }
 
     if (command) {
       const senderNumber = senderId.split('@')[0];

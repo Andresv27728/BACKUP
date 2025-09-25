@@ -1,79 +1,54 @@
-import axios from "axios";
-
-// Helper to send reactions
-async function doReact(emoji, msg, sock) {
-  try {
-    await sock.sendMessage(msg.key.remoteJid, {
-      react: { text: emoji, key: msg.key },
-    });
-  } catch (e) {
-    console.error("Reaction error:", e);
-  }
-}
+import { igdl } from 'ruhend-scraper';
 
 const facebookCommand = {
   name: "facebook",
-  category: "descargas",
-  description: "Descarga un video de Facebook desde un enlace.",
+  category: "downloader",
+  description: "Descarga un video de Facebook desde un enlace, con o sin comando.",
   aliases: ["fb", "fbdl"],
+  customPrefix: /https?:\/\/(www\.)?(facebook\.com|fb\.watch)\//i,
 
   async execute({ sock, msg, args }) {
-    await doReact("📥", msg, sock);
-    const url = args[0];
+    // Determinar la URL si se activa por comando o por regex
+    const isCmd = this.aliases.includes(msg.command) || this.name === msg.command;
+    const url = isCmd ? args[0] : msg.body;
 
-    if (!url) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace de Facebook para descargar." }, { quoted: msg });
-    }
-
-    const fbRegex = /^(https?:\/\/)?(www\.|m\.)?(facebook\.com|fb\.watch)\/.+/i;
-    if (!fbRegex.test(url)) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "El enlace proporcionado no parece ser de Facebook. Por favor, verifica la URL." }, { quoted: msg });
+    if (!url || !this.customPrefix.test(url)) {
+      if (isCmd) { // Solo enviar mensaje de error si fue un comando explícito
+        return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace de Facebook válido." }, { quoted: msg });
+      }
+      return; // Si no es comando y no es un enlace, no hacer nada
     }
 
     try {
-      await sock.sendMessage(msg.key.remoteJid, { text: "Procesando tu enlace, por favor espera un momento..." }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { react: { text: "🕒", key: msg.key } });
 
-      const apiUrl = `https://suhas-bro-api.vercel.app/download/fbdown?url=${encodeURIComponent(url)}`;
-      const { data } = await axios.get(apiUrl);
+      const res = await igdl(url);
+      const result = res.data;
 
-      if (!data.status || !data.result) {
-        return sock.sendMessage(msg.key.remoteJid, { text: "No se pudo obtener la información del video. El enlace podría ser inválido o privado." }, { quoted: msg });
+      if (!result || result.length === 0) {
+        throw new Error("No se encontraron resultados o el enlace es inválido.");
       }
 
-      const { thumb, title, desc, sd, hd } = data.result;
-      const videoUrl = hd || sd;
+      const data = result.find(i => i.resolution === "720p (HD)") || result.find(i => i.resolution === "360p (SD)");
 
-      if (!videoUrl) {
-        return sock.sendMessage(msg.key.remoteJid, { text: "No se encontró un enlace de descarga en la respuesta de la API." }, { quoted: msg });
+      if (!data || !data.url) {
+        throw new Error("No se encontró una resolución de video adecuada para descargar.");
       }
 
-      const infoMessage = `*Descarga de Facebook*\n\n*Título:* ${title || "Sin título"}\n\n*Descripción:* ${desc || "Sin descripción"}`.trim();
+      const caption = "Aquí tienes tu video de Facebook.";
 
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          image: { url: thumb },
-          caption: infoMessage
-        },
-        { quoted: msg }
-      );
+      await sock.sendMessage(msg.key.remoteJid, {
+        video: { url: data.url },
+        caption: caption,
+        mimetype: 'video/mp4'
+      }, { quoted: msg });
 
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          video: { url: videoUrl },
-          mimetype: "video/mp4",
-          caption: "Aquí tienes tu video."
-        },
-        { quoted: msg }
-      );
+      await sock.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
 
-      await doReact("✅", msg, sock);
-
-    } catch (error) {
-      console.error("Error en el comando facebook:", error);
-      await doReact("❌", msg, sock);
-      await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al procesar tu solicitud. Intenta nuevamente.\n\n*Detalles:* ${error.message}` }, { quoted: msg });
+    } catch (e) {
+      console.error("Error en el comando facebook:", e);
+      await sock.sendMessage(msg.key.remoteJid, { react: { text: "⚠️", key: msg.key } });
+      await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al descargar el video. Por favor, verifica que el enlace sea correcto y público.\n\n*Detalles:* ${e.message}` }, { quoted: msg });
     }
   }
 };
