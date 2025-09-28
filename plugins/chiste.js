@@ -1,19 +1,35 @@
-const chistes = [
-  "¿Qué le dice un pez a otro? ¡Nada!",
-  "¿Por qué los pájaros no usan Facebook? Porque ya tienen Twitter.",
-  "¿Cómo se dice pañuelo en japonés? Saka-moko.",
-  "¿Qué hace una abeja en el gimnasio? ¡Zumba!",
-  "Si los zombies se descomponen con el tiempo, ¿son biodegradables?"
-];
+import axios from 'axios';
 
 const chisteCommand = {
   name: "chiste",
-  category: "juegos",
-  description: "El bot te cuenta un chiste.",
+  category: "diversion",
+  description: "Te cuenta un chiste al azar.",
+  aliases: ["joke"],
 
   async execute({ sock, msg }) {
-    const randomChiste = chistes[Math.floor(Math.random() * chistes.length)];
-    await sock.sendMessage(msg.key.remoteJid, { text: randomChiste }, { quoted: msg });
+    try {
+      const response = await axios.get('https://v2.jokeapi.dev/joke/Any?lang=es');
+      const jokeData = response.data;
+
+      if (jokeData.error) {
+        throw new Error('La API de chistes devolvió un error.');
+      }
+
+      let jokeText = '';
+      if (jokeData.type === 'single') {
+        // Chiste de una sola línea
+        jokeText = jokeData.joke;
+        await sock.sendMessage(msg.key.remoteJid, { text: jokeText }, { quoted: msg });
+      } else {
+        // Chiste de dos partes (pregunta y respuesta)
+        jokeText = `${jokeData.setup}\n\n... ${jokeData.delivery}`;
+        await sock.sendMessage(msg.key.remoteJid, { text: jokeText }, { quoted: msg });
+      }
+
+    } catch (error) {
+      console.error("Error en el comando chiste:", error);
+      await sock.sendMessage(msg.key.remoteJid, { text: "No pude encontrar un chiste en este momento, ¡inténtalo de nuevo!" }, { quoted: msg });
+    }
   }
 };
 

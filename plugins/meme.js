@@ -1,44 +1,55 @@
 import axios from 'axios';
 
+// Lista de subreddits de memes en español para obtener variedad
+const memeSubreddits = [
+  "memesenespanol",
+  "SpanishMeme",
+  "BuenosMemesEsp",
+  "LatinoPeopleTwitter",
+  "yo_elvr" // "yo en la vida real"
+];
+
 const memeCommand = {
   name: "meme",
   category: "diversion",
-  description: "Envía un meme al azar.",
+  description: "Envía un meme al azar de diferentes fuentes en español.",
 
   async execute({ sock, msg }) {
     try {
-      const apiResponse = await axios.get('https://meme-api.com/gimme/memesenespanol');
+      // 1. Seleccionar un subreddit al azar de la lista
+      const randomSubreddit = memeSubreddits[Math.floor(Math.random() * memeSubreddits.length)];
+
+      await sock.sendMessage(msg.key.remoteJid, { react: { text: "😂", key: msg.key } });
+
+      // 2. Llamar a la API con el subreddit seleccionado
+      const apiResponse = await axios.get(`https://meme-api.com/gimme/${randomSubreddit}`);
       const meme = apiResponse.data;
 
       if (!meme || !meme.url) {
-        throw new Error("La API de memes no devolvió una URL válida.");
+        throw new Error(`La API no devolvió una URL válida para el subreddit '${randomSubreddit}'.`);
       }
 
-      console.log(`[meme.js] URL de imagen obtenida: ${meme.url}`);
-
+      // 3. Descargar la imagen y verificar que sea una imagen
       const imageResponse = await axios.get(meme.url, {
         responseType: 'arraybuffer'
       });
 
-      // --- LOG DE DIAGNÓSTICO FINAL ---
       const contentType = imageResponse.headers['content-type'];
-      console.log(`[meme.js] Content-Type de la respuesta de la imagen: ${contentType}`);
-
-      // Verificar si la respuesta es realmente una imagen
       if (!contentType || !contentType.startsWith('image/')) {
-          throw new Error(`La URL no devolvió una imagen, sino un ${contentType}.`);
+        throw new Error(`El enlace del subreddit '${randomSubreddit}' no contenía una imagen (tipo: ${contentType}).`);
       }
 
       const imageBuffer = Buffer.from(imageResponse.data, 'binary');
 
+      // 4. Enviar la imagen con el título
       await sock.sendMessage(msg.key.remoteJid, {
         image: imageBuffer,
-        caption: `*${meme.title}*`
+        caption: `*${meme.title}*\n\n_Fuente: r/${meme.subreddit}_`
       }, { quoted: msg });
 
     } catch (e) {
       console.error("Error en el comando meme:", e);
-      await sock.sendMessage(msg.key.remoteJid, { text: `No se pudo obtener un meme. Error: ${e.message}` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: `No se pudo obtener un meme en este momento. Inténtalo de nuevo.\n*Error:* ${e.message}` }, { quoted: msg });
     }
   }
 };

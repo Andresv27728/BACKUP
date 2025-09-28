@@ -5,7 +5,7 @@ import { readSettingsDb, readMaintenanceDb } from './lib/database.js';
 import print from './lib/print.js';
 
 const COOLDOWN_SECONDS = 5;
-const RESPONSE_DELAY_MS = 2000;
+const RESPONSE_DELAY_MS = 250; // Reducido de 2000
 
 export async function handler(m, isSubBot = false) { // Se añade isSubBot para diferenciar
   const sock = this;
@@ -28,38 +28,39 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     let commandName = '';
     let args = [];
 
-    const settings = readSettingsDb();
-    const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
-    const globalPrefix = config.prefix || '.'; // Usar '.' como prefijo global por defecto
-
-    let isPrefixed = false;
-    let textAfterPrefix = '';
-
-    if (groupPrefix && body.startsWith(groupPrefix)) {
-      isPrefixed = true;
-      textAfterPrefix = body.slice(groupPrefix.length);
-    } else if (!groupPrefix && body.startsWith(globalPrefix)) {
-      isPrefixed = true;
-      textAfterPrefix = body.slice(globalPrefix.length);
-    }
-
-    // 1. Probar comandos con prefijo
-    if (isPrefixed) {
-      commandName = textAfterPrefix.trim().split(/ +/)[0].toLowerCase();
-      command = commands.get(commandName) || commands.get(aliases.get(commandName));
-      if (command) {
-        args = textAfterPrefix.trim().split(/ +/).slice(1);
+    // 1. Probar comandos sin prefijo (regex) primero.
+    for (const cmd of commands.values()) {
+      if (cmd.customPrefix && cmd.customPrefix.test(body)) {
+        command = cmd;
+        commandName = cmd.name;
+        args = [body]; // El cuerpo completo es el argumento
+        break;
       }
     }
 
-    // 2. Si no se encontró un comando con prefijo, probar sin prefijo (regex)
+    // 2. Si no se encontró un comando sin prefijo, probar con prefijos.
     if (!command) {
-      for (const cmd of commands.values()) {
-        if (cmd.customPrefix && cmd.customPrefix.test(body)) {
-          command = cmd;
-          commandName = cmd.name;
-          args = [body]; // El cuerpo completo es el argumento
-          break;
+      const settings = readSettingsDb();
+      const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
+      const globalPrefix = config.prefix || '.'; // Usar '.' como prefijo global por defecto
+
+      let prefixUsed = null;
+      if (groupPrefix && body.startsWith(groupPrefix)) {
+        prefixUsed = groupPrefix;
+      } else if (body.startsWith(globalPrefix)) {
+        // Solo usar el prefijo global si no hay un prefijo de grupo o si no coincide
+        // Esto previene que el prefijo global se active en un grupo con prefijo personalizado.
+        if (!groupPrefix) {
+           prefixUsed = globalPrefix;
+        }
+      }
+
+      if (prefixUsed) {
+        const textAfterPrefix = body.slice(prefixUsed.length);
+        commandName = textAfterPrefix.trim().split(/ +/)[0].toLowerCase();
+        command = commands.get(commandName) || commands.get(aliases.get(commandName));
+        if (command) {
+          args = textAfterPrefix.trim().split(/ +/).slice(1);
         }
       }
     }

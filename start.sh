@@ -1,19 +1,17 @@
 #!/bin/bash
 
-# --- Script de Inicio y Auto-Actualización Robusto ---
-# Este script se asegura de que el bot siempre esté ejecutando la última versión del código desde GitHub,
-# descartando cualquier cambio local que pueda causar conflictos.
+# --- Script de Inicio y Auto-Actualización desde 'main' ---
+# Este script se asegura de que el bot siempre esté ejecutando la última versión
+# del código desde la rama 'main' de GitHub, descartando cualquier cambio local.
 
-echo ">>> [Paso 1/3] Forzando actualización desde GitHub..."
-# Obtener el nombre de la rama actual para asegurar que se actualice la rama correcta.
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo ">>> [Paso 1/3] Forzando actualización desde la rama 'main' de GitHub..."
 
 # Descargar los últimos cambios del origen sin intentar fusionar.
 git fetch origin
 
-# Forzar el reseteo de la rama local a la versión exacta del origen.
-# Esto descarta cambios locales y previene errores de "overwrite".
-git reset --hard origin/$BRANCH
+# Forzar el reseteo de la rama local a la versión exacta de origin/main.
+# Esto descarta cambios locales y previene errores.
+git reset --hard origin/main
 
 # Limpiar cualquier archivo o directorio no rastreado que pueda interferir.
 git clean -df
